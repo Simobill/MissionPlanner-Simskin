@@ -15,6 +15,7 @@ defaults:
 
 jobs:
   build:
+    if: github.repository == 'ArduPilot/MissionPlanner'  # OpsGCS fork: upstream-only job
     name: Linux x86_64
     runs-on: ubuntu-22.04
     timeout-minutes: 30
@@ -58,7 +59,7 @@ jobs:
   publish:
     name: Publish Linux development download
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: github.repository == 'ArduPilot/MissionPlanner' && github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-22.04
     permissions:
       contents: write

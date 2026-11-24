@@ -23,6 +23,7 @@
 
  <ItemGroup>
     <Compile Remove="APMPlannerXplanes\**" />
+    <Compile Remove="OpsGCS\**" />
     <Compile Remove="ExtLibs\7zip\**" />
     <Compile Remove="ExtLibs\alglibnet\**" />
     <Compile Remove="ExtLibs\Antenna\**" />

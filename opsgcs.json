@@ -1,0 +1,34 @@
+{
+  "ProductName": "OPS GCS",
+  "Unit": "",
+  "EngineerPinSha256": "",
+  "StartAsEngineer": false,
+  "ShowFleet": true,
+  "OperatorMapMenuAllowlist": [
+    "goHereToolStripMenuItem",
+    "flyToHereAltToolStripMenuItem",
+    "flyToCoordsToolStripMenuItem",
+    "pointCameraHereToolStripMenuItem",
+    "triggerCameraToolStripMenuItem",
+    "takeOffToolStripMenuItem"
+  ],
+  "Thresholds": {
+    "BattCautionPct": 35,
+    "BattWarningPct": 20,
+    "CellCount": 0,
+    "CellCautionV": 3.60,
+    "CellWarningV": 3.45,
+    "GpsMinFixType": 3,
+    "GpsCautionSats": 10,
+    "GpsWarningSats": 6,
+    "GpsCautionHdop": 1.5,
+    "GpsWarningHdop": 2.5,
+    "EkfCaution": 0.5,
+    "EkfWarning": 0.8,
+    "LinkCautionPct": 80,
+    "LinkWarningPct": 50,
+    "LinkStaleSec": 3.0,
+    "VibeCaution": 30,
+    "VibeWarning": 60
+  }
+}

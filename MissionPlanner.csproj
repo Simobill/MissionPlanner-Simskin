@@ -718,6 +718,12 @@
     <None Update="Drivers\x86\winusbcoinstaller2.dll">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Update="custom.mpsystheme">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="opsgcs.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="HighContrast.mpsystheme">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

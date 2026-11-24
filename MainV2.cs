@@ -4081,11 +4081,24 @@ namespace MissionPlanner
         /// <param name="msg"></param>
         /// <param name="keyData"></param>
         /// <returns></returns>
+        /// <summary>
+        /// Optional hook for derived GCS builds: return true to suppress the built-in shortcut
+        /// handlers below for this key (default control key handling still runs), false to continue.
+        /// </summary>
+        public static Func<Keys, bool> ShortcutFilter;
+
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
             if (ConfigTerminal.SSHTerminal)
             {
                 return false;
+            }
+
+            var shortcutFilter = ShortcutFilter;
+            if (shortcutFilter != null && shortcutFilter(keyData))
+            {
+                // suppressed: skip the built-in shortcut table, keep default key handling
+                return base.ProcessCmdKey(ref msg, keyData);
             }
 
             if (keyData == Keys.F12)
