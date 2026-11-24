@@ -33,7 +33,7 @@ namespace MissionPlanner.OpsGCS.UI
                 Margin = new Padding(0),
                 Padding = new Padding(0)
             };
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 0)); // set below from font height
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, showFleet ? 50 : 0));
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, showFleet ? 50 : 100));
 
@@ -45,7 +45,7 @@ namespace MissionPlanner.OpsGCS.UI
             _header.Padding = new Padding(6, 0, 0, 0);
 
             _roleButton.Dock = DockStyle.Right;
-            _roleButton.Width = 110;
+            _roleButton.AutoSize = true;
             _roleButton.FlatStyle = FlatStyle.Flat;
             _roleButton.FlatAppearance.BorderColor = OpsPalette.Border;
             _roleButton.BackColor = OpsPalette.SurfaceRaised;
@@ -57,6 +57,7 @@ namespace MissionPlanner.OpsGCS.UI
                     RoleButtonClicked(this, EventArgs.Empty);
             };
 
+            layout.RowStyles[0].Height = _header.Font.Height + 14;
             top.Controls.Add(_header);
             top.Controls.Add(_roleButton);
 
@@ -111,18 +112,19 @@ namespace MissionPlanner.OpsGCS.UI
                 using (var p = new Pen(OpsPalette.Border))
                     g.DrawLine(p, 0, 0, Width, 0);
 
-                int y = 8, rowH = 30;
+                float k = g.DpiX / 96f;
+                int y = (int)(8 * k), rowH = _valFont.Height + (int)(12 * k), dot = _keyFont.Height / 2 + 2;
                 foreach (var it in _items)
                 {
                     var c = OpsPalette.For(it.Level);
                     using (var b = new SolidBrush(c))
-                        g.FillEllipse(b, 8, y + 7, 10, 10);
+                        g.FillEllipse(b, 8 * k, y + (rowH - dot) / 2f - 4, dot, dot);
                     using (var b = new SolidBrush(OpsPalette.TextMuted))
-                        g.DrawString(it.Key, _keyFont, b, 24, y + 5);
+                        g.DrawString(it.Key, _keyFont, b, 24 * k, y + 2);
                     using (var b = new SolidBrush(it.Level == HealthLevel.Unknown ? OpsPalette.TextMuted : c))
-                        g.DrawString(it.Value, _valFont, b, 70, y + 3);
+                        g.DrawString(it.Value, _valFont, b, 70 * k, y);
                     using (var b = new SolidBrush(OpsPalette.Text))
-                        g.DrawString(it.Detail, _detFont, b, 160, y + 6);
+                        g.DrawString(it.Detail, _detFont, b, 160 * k, y + 2);
                     y += rowH;
                 }
             }

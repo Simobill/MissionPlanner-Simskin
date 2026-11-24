@@ -20,7 +20,7 @@ namespace MissionPlanner.OpsGCS.UI
         {
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer |
                      ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
-            Height = 40;
+            Height = 4 + _labelFont.Height + _valueFont.Height + 6;
             BackColor = OpsPalette.Surface;
         }
 
@@ -37,21 +37,22 @@ namespace MissionPlanner.OpsGCS.UI
             using (var p = new Pen(OpsPalette.Border))
                 g.DrawLine(p, 0, 0, Width, 0);
 
-            int pad = 6, x = pad;
+            float k = g.DpiX / 96f;
+            int pad = (int)(6 * k), x = pad;
             var inv = CultureInfo.InvariantCulture;
             var flyable = Math.Max(0, _s.MissionCount - 1);
 
-            x = Field(g, x, "WP", flyable > 0 ? string.Format(inv, "{0}/{1}", Math.Max(0, _s.CurrentWp), flyable) : "--", 70);
-            x = Field(g, x, "TO WP", _s.WpDistM > 0 ? FormatDist(_s.WpDistM) : "--", 84);
-            x = Field(g, x, "ETA WP", HealthEvaluator.FormatDuration(HealthEvaluator.EtaToWpSec(_s.WpDistM, _s.GroundSpeedMs)), 74);
-            x = Field(g, x, "GS", string.Format(inv, "{0:0.0} m/s", _s.GroundSpeedMs), 84);
-            x = Field(g, x, "ALT", string.Format(inv, "{0:0} m", _s.AltM), 70);
-            x = Field(g, x, "HOME", FormatDist(_s.DistToHomeM), 84);
-            x = Field(g, x, "AIR", HealthEvaluator.FormatDuration(_s.TimeInAirSec), 74);
+            x = Field(g, x, "WP", flyable > 0 ? string.Format(inv, "{0}/{1}", Math.Max(0, _s.CurrentWp), flyable) : "--", (int)(70 * k));
+            x = Field(g, x, "TO WP", _s.WpDistM > 0 ? FormatDist(_s.WpDistM) : "--", (int)(84 * k));
+            x = Field(g, x, "ETA WP", HealthEvaluator.FormatDuration(HealthEvaluator.EtaToWpSec(_s.WpDistM, _s.GroundSpeedMs)), (int)(74 * k));
+            x = Field(g, x, "GS", string.Format(inv, "{0:0.0} m/s", _s.GroundSpeedMs), (int)(84 * k));
+            x = Field(g, x, "ALT", string.Format(inv, "{0:0} m", _s.AltM), (int)(70 * k));
+            x = Field(g, x, "HOME", FormatDist(_s.DistToHomeM), (int)(84 * k));
+            x = Field(g, x, "AIR", HealthEvaluator.FormatDuration(_s.TimeInAirSec), (int)(74 * k));
 
             // progress bar with one tick per mission item
-            int bx = x + pad, bw = Width - bx - pad * 2, by = 14, bh = 12;
-            if (bw < 60)
+            int bx = x + pad, bw = Width - bx - pad * 2, by = 3 + _labelFont.Height, bh = (int)(12 * k);
+            if (bw < 60 * k)
                 return;
 
             using (var b = new SolidBrush(OpsPalette.SurfaceRaised))
@@ -83,7 +84,7 @@ namespace MissionPlanner.OpsGCS.UI
             using (var b = new SolidBrush(OpsPalette.TextMuted))
                 g.DrawString(label, _labelFont, b, x, 3);
             using (var b = new SolidBrush(OpsPalette.Text))
-                g.DrawString(value, _valueFont, b, x, 16);
+                g.DrawString(value, _valueFont, b, x, 3 + _labelFont.Height);
             return x + w;
         }
 

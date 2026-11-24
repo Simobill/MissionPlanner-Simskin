@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Windows.Forms;
@@ -112,13 +113,14 @@ namespace MissionPlanner.OpsGCS
             if (main == null || fd == null)
                 return;
 
-            // health strip on top of the map, mission strip under it
-            var mapHost = fd.gMapControl1.Parent;
+            // full-width status bar above and mission bar below the whole Flight Data view.
+            // Not inside the map panel: upstream overlays (distance bar, wind, legend) are
+            // absolutely positioned there and would paint over the strips.
             _healthStrip = new HealthStrip { Dock = DockStyle.Top };
             _missionStrip = new MissionStrip { Dock = DockStyle.Bottom };
-            mapHost.Controls.Add(_healthStrip);
-            mapHost.Controls.Add(_missionStrip);
-            // docked edges must sit behind the Fill-docked map in z-order to claim their space first
+            fd.Controls.Add(_healthStrip);
+            fd.Controls.Add(_missionStrip);
+            // docked edges must sit behind the Fill-docked MainH in z-order to claim their space first
             _healthStrip.SendToBack();
             _missionStrip.SendToBack();
 
@@ -130,6 +132,14 @@ namespace MissionPlanner.OpsGCS
             _opsTab.Controls.Add(_opsPanel);
             if (!fd.TabListOriginal.Contains(_opsTab))
                 fd.TabListOriginal.Insert(0, _opsTab);
+            RegisterOpsTabSetting(fd);
+            // FlightData_Load rebuilds the tab list after plugins load, without raising LayoutChanged
+            fd.tabControlactions.ControlRemoved += (s, e) =>
+            {
+                // defer: this fires inside TabPages.Clear(); re-adding there would fight the rebuild
+                if (e.Control == _opsTab && fd.IsHandleCreated)
+                    fd.BeginInvoke((Action)(() => EnsureOpsTab(false)));
+            };
 
             // map right-click restriction
             fd.contextMenuStripMap.Opening += (s, e) => FilterMapMenu(fd.contextMenuStripMap);
@@ -140,9 +150,60 @@ namespace MissionPlanner.OpsGCS
             MainV2.ShortcutFilter = FilterShortcut;
             MainV2.LayoutChanged += OnLayoutChanged;
 
+            ApplyOpsThemeOnce(main);
+
             _uiReady = true;
             ApplyRole(_role);
             Brand();
+            EnsureOpsTab(true);
+        }
+
+        /// <summary>
+        /// Upstream rebuilds the Flight Data tabs from the "tabcontrolactions" setting; list the
+        /// OPS tab first there so the rebuild keeps it.
+        /// </summary>
+        private void RegisterOpsTabSetting(FlightData fd)
+        {
+            var tabs = Settings.Instance["tabcontrolactions"];
+            if (string.IsNullOrEmpty(tabs))
+            {
+                // upstream does not rebuild while the setting is empty; seed it with the current order
+                tabs = string.Join(";", fd.TabListOriginal.Select(t => t.Name)) + ";";
+            }
+
+            var names = tabs.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries).ToList();
+            if (names.Count > 0 && names[0] == OpsTabName)
+                return;
+
+            names.Remove(OpsTabName);
+            names.Insert(0, OpsTabName);
+            Settings.Instance["tabcontrolactions"] = string.Join(";", names) + ";";
+        }
+
+        /// <summary>
+        /// Upstream picks custom.mpsystheme only for a profile with no saved theme. Switch an
+        /// existing profile once; after that the user's theme choice (engineer mode) is respected.
+        /// </summary>
+        private static void ApplyOpsThemeOnce(MainV2 main)
+        {
+            const string flag = "opsgcs_theme_v1";
+            if (Settings.Instance[flag] != null)
+                return;
+
+            try
+            {
+                if (File.Exists(Path.Combine(Settings.GetRunningDirectory(), "custom.mpsystheme")))
+                {
+                    ThemeManager.LoadTheme("custom.mpsystheme");
+                    ThemeManager.ApplyThemeTo(main);
+                }
+            }
+            catch (Exception ex)
+            {
+                log.Warn("OpsGCS theme apply failed", ex);
+            }
+
+            Settings.Instance[flag] = "1";
         }
 
         // ------------------------------------------------------------------ roles
@@ -199,17 +260,19 @@ namespace MissionPlanner.OpsGCS
             if (main.MenuArduPilot != null)
                 main.MenuArduPilot.Visible = engineer;
 
-            EnsureOpsTab();
+            EnsureOpsTab(false);
         }
 
-        private void EnsureOpsTab()
+        private void EnsureOpsTab(bool select)
         {
+            if (_opsTab == null || FlightData.instance == null)
+                return;
+
             var tabs = FlightData.instance.tabControlactions;
             if (!tabs.TabPages.Contains(_opsTab))
-            {
                 tabs.TabPages.Insert(0, _opsTab);
+            if (select)
                 tabs.SelectedTab = _opsTab;
-            }
         }
 
         private bool FilterShortcut(Keys key)

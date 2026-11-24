@@ -25,8 +25,8 @@ namespace MissionPlanner.OpsGCS.UI
         private List<FleetRow> _rows = new List<FleetRow>();
         private readonly Font _labelFont = OpsPalette.Label(7.5f);
         private readonly Font _rowFont = OpsPalette.Value(9.5f);
-        private const int Header = 22;
-        private const int RowH = 26;
+        private int Header { get { return _labelFont.Height + 10; } }
+        private int RowH { get { return _rowFont.Height + 10; } }
 
         public event Action<FleetRow> VehicleSelected;
 

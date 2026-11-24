@@ -30,7 +30,8 @@ namespace MissionPlanner.OpsGCS.UI
         {
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer |
                      ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
-            Height = 44;
+            // size from the fonts so the strip follows Windows display scaling
+            Height = 6 * 2 + 2 + _labelFont.Height + _modeFont.Height;
             BackColor = OpsPalette.Surface;
             ForeColor = OpsPalette.Text;
         }
@@ -69,13 +70,14 @@ namespace MissionPlanner.OpsGCS.UI
             g.Clear(OpsPalette.Surface);
             _hit.Clear();
 
-            int pad = 6, x = pad, h = Height - pad * 2;
+            float k = g.DpiX / 96f;
+            int pad = (int)(6 * k), x = pad, h = Height - pad * 2;
 
             // vehicle block
-            x = DrawBlock(g, x, pad, 120, h, "VEHICLE", _vehicle, _connected ? OpsPalette.Accent : OpsPalette.Unknown, null);
+            x = DrawBlock(g, x, pad, (int)(120 * k), h, "VEHICLE", _vehicle, _connected ? OpsPalette.Accent : OpsPalette.Unknown, null);
 
             // mode
-            x = DrawBlock(g, x, pad, 130, h, "MODE", _mode, OpsPalette.Text, _modeFont);
+            x = DrawBlock(g, x, pad, (int)(150 * k), h, "MODE", _mode, OpsPalette.Text, _modeFont);
 
             // arm / failsafe
             var armText = !_connected ? "--" : _failsafe ? "FAILSAFE" : _armed ? "ARMED" : "DISARMED";
@@ -83,7 +85,7 @@ namespace MissionPlanner.OpsGCS.UI
                 : _failsafe ? OpsPalette.Warning
                 : _armed ? OpsPalette.Caution
                 : OpsPalette.Ok;
-            x = DrawBlock(g, x, pad, 104, h, "STATE", armText, armColor, null);
+            x = DrawBlock(g, x, pad, (int)(110 * k), h, "STATE", armText, armColor, null);
 
             x += pad;
 
@@ -91,7 +93,7 @@ namespace MissionPlanner.OpsGCS.UI
             if (_items.Count > 0)
             {
                 int remaining = Width - x - pad;
-                int w = Math.Max(78, remaining / _items.Count - pad);
+                int w = Math.Max((int)(78 * k), remaining / _items.Count - pad);
                 foreach (var item in _items)
                 {
                     var rect = new Rectangle(x, pad, w, h);
@@ -112,7 +114,7 @@ namespace MissionPlanner.OpsGCS.UI
             using (var b = new SolidBrush(OpsPalette.TextMuted))
                 g.DrawString(label, _labelFont, b, x + 6, y + 1);
             using (var b = new SolidBrush(valueColor))
-                g.DrawString(value, font ?? _valueFont, b, x + 5, y + 12);
+                g.DrawString(value, font ?? _valueFont, b, x + 5, y + 1 + _labelFont.Height);
             return x + w + 4;
         }
 
@@ -132,7 +134,7 @@ namespace MissionPlanner.OpsGCS.UI
             using (var b = new SolidBrush(OpsPalette.TextMuted))
                 g.DrawString(item.Key, _labelFont, b, r.X + 9, r.Y + 1);
             using (var b = new SolidBrush(item.Level == HealthLevel.Unknown ? OpsPalette.TextMuted : c))
-                g.DrawString(item.Value, _valueFont, b, r.X + 8, r.Y + 12);
+                g.DrawString(item.Value, _valueFont, b, r.X + 8, r.Y + 1 + _labelFont.Height);
         }
 
         protected override void Dispose(bool disposing)
