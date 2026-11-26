@@ -10,7 +10,7 @@ It adds a separate interface layer and changes upstream code as little as possib
 |---|---|---|
 | Role model, menus, shortcuts, map menu | `OpsGCS/OpsGcsPlugin.cs` | none (compiled into the exe, loaded by `PluginLoader` "self" scan) |
 | Health/mission logic (pure, unit-tested) | `OpsGCS/Core/*` | none |
-| Dashboard panels | `OpsGCS/UI/*` | none |
+| Dashboard panels, map layers | `OpsGCS/UI/*`, `OpsGCS/Services/*` | none |
 | Shortcut hook | `MainV2.ShortcutFilter` | +13 lines in `MainV2.cs` |
 | Dark theme | `custom.mpsystheme` (picked up by upstream on first run) | new file + csproj copy rule |
 | Deployment config | `opsgcs.json` | new file + csproj copy rule |
@@ -53,6 +53,29 @@ Paste the output into `EngineerPinSha256` in `opsgcs.json`, which sits next to `
   the active vehicle. Click a row to make that vehicle the active one.
 
 The overlay always shows SI units (m, m/s), whatever display units are set in the Planner settings.
+
+## Map layers (LAYERS tab)
+
+Both layers are off by default. Each toggle is saved per user.
+
+**Live viewshed** is computed on a background thread from the SRTM terrain data (about 30 m resolution). It recomputes when the observer moves `RecomputeMoveM` or climbs, at most every `MinIntervalSec`.
+
+- **From vehicle sensor:** the ground the vehicle can see within `SensorRangeM` of its position and altitude. It checks visibility all the way round and ignores where the gimbal is pointing.
+- **GCS radio coverage:** where a vehicle at its current altitude keeps line of sight to an antenna `GcsMastHeightM` above home, within `RadioRangeM`. This is geometry only: it doesn't model signal fade or antenna patterns.
+- **Map colours:** blue means visible, hatched means hidden by terrain, and grey means no terrain data yet. The grey clears by itself once Mission Planner's terrain cache has the tile.
+- **Accuracy:** earth curvature and atmospheric refraction are included (k is 0.07 for optical and 0.13 for radio). SRTM includes neither buildings nor trees, so in towns and forest the shading is too optimistic.
+
+**Weather** (needs internet) refreshes every `RefreshMin` minutes, or when the vehicle has moved a third of the grid away.
+
+- **Forecast grid from api.open-meteo.com:** a `GridN`×`GridN` grid over `GridSpanKm`, centred on the vehicle or on the map. The map shows a wind barb per grid point and violet cells for precipitation.
+- **Airport observation (METAR) from aviationweather.gov:** the nearest station within `MetarSearchKm`, or a fixed `MetarStation`. It supplies cloud ceiling, visibility and observed wind.
+- **Vehicle wind:** the wind the vehicle itself estimates (from its EKF), always taken from telemetry.
+- **Weather card:** shows which source each value came from and how old it is. It turns amber after `StaleMin` minutes and shows a precipitation alert above `PrecipCautionMm`.
+- **Network access:** the laptop needs outbound HTTPS to `api.open-meteo.com` and `aviationweather.gov`. If one source fails, the other keeps working.
+
+> **Open-Meteo licence:** the free endpoint is for non-commercial use and requires attribution (CC BY 4.0). For government or contract use, buy an API key and set
+> `"OpenMeteoUrl": "https://customer-api.open-meteo.com/v1/forecast"` and `"OpenMeteoApiKey"`.
+> The aviationweather.gov data API is public and needs no key.
 
 ## Build
 

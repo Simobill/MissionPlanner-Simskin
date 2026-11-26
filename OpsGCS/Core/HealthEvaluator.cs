@@ -60,6 +60,15 @@ namespace MissionPlanner.OpsGCS.Core
         public double TimeInAirSec;
         public double DistToHomeM;
         public double AltM;
+
+        // position, for map layers (degrees, metres AMSL)
+        public double Lat, Lon, AltAmsl;
+        public bool HasPosition;
+        public double HomeLat, HomeLon, HomeAltAmsl;
+        public bool HasHome;
+
+        // vehicle wind estimate: direction the wind blows FROM, speed m/s
+        public double WindFromDeg, WindMs;
     }
 
     public static class HealthEvaluator

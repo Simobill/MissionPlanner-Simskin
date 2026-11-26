@@ -8,6 +8,7 @@ using log4net;
 using MissionPlanner.Controls;
 using MissionPlanner.GCSViews;
 using MissionPlanner.OpsGCS.Core;
+using MissionPlanner.OpsGCS.Services;
 using MissionPlanner.OpsGCS.UI;
 using MissionPlanner.Utilities;
 
@@ -28,6 +29,7 @@ namespace MissionPlanner.OpsGCS
         private static readonly ILog log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
 
         public const string OpsTabName = "tabOpsGcs";
+        public const string LayersTabName = "tabOpsLayers";
 
         private OpsConfig _cfg = new OpsConfig();
         private OpsRole _role = OpsRole.Operator;
@@ -36,6 +38,13 @@ namespace MissionPlanner.OpsGCS
         private MissionStrip _missionStrip;
         private OpsTabPanel _opsPanel;
         private TabPage _opsTab;
+        private TabPage _layersTab;
+        private LayersPanel _layersPanel;
+        private MapLayers _mapLayers;
+        private ViewshedService _viewshed;
+        private WeatherService _weather;
+        private volatile VehicleSnapshot _activeSnap;
+        private volatile GeoPoint _mapCenter;
         private bool _uiReady;
         private bool _settingTitle;
         private int _busy;
@@ -99,6 +108,8 @@ namespace MissionPlanner.OpsGCS
 
         public override bool Exit()
         {
+            if (_viewshed != null) _viewshed.Dispose();
+            if (_weather != null) _weather.Dispose();
             MainV2.ShortcutFilter = null;
             MainV2.LayoutChanged -= OnLayoutChanged;
             return true;
@@ -132,12 +143,15 @@ namespace MissionPlanner.OpsGCS
             _opsTab.Controls.Add(_opsPanel);
             if (!fd.TabListOriginal.Contains(_opsTab))
                 fd.TabListOriginal.Insert(0, _opsTab);
+
+            SetupLayers(fd);
+
             RegisterOpsTabSetting(fd);
             // FlightData_Load rebuilds the tab list after plugins load, without raising LayoutChanged
             fd.tabControlactions.ControlRemoved += (s, e) =>
             {
                 // defer: this fires inside TabPages.Clear(); re-adding there would fight the rebuild
-                if (e.Control == _opsTab && fd.IsHandleCreated)
+                if ((e.Control == _opsTab || e.Control == _layersTab) && fd.IsHandleCreated)
                     fd.BeginInvoke((Action)(() => EnsureOpsTab(false)));
             };
 
@@ -158,6 +172,119 @@ namespace MissionPlanner.OpsGCS
             EnsureOpsTab(true);
         }
 
+        // ------------------------------------------------------------------ map layers
+
+        private const string SetViewshed = "opsgcs_viewshed";
+        private const string SetViewshedSource = "opsgcs_viewshed_source";
+        private const string SetWeather = "opsgcs_weather";
+
+        private void SetupLayers(FlightData fd)
+        {
+            _mapLayers = new MapLayers(fd.gMapControl1);
+
+            _viewshed = new ViewshedService(_cfg.Viewshed, () => _activeSnap);
+            _weather = new WeatherService(_cfg.Weather, WeatherCenter);
+
+            _layersPanel = new LayersPanel();
+            _layersPanel.Card.SetConfig(_cfg.Weather);
+            _layersTab = new TabPage("LAYERS") { Name = LayersTabName, BackColor = OpsPalette.Surface };
+            _layersTab.Controls.Add(_layersPanel);
+            if (!fd.TabListOriginal.Contains(_layersTab))
+                fd.TabListOriginal.Insert(Math.Min(1, fd.TabListOriginal.Count), _layersTab);
+
+            var source = Settings.Instance[SetViewshedSource] == "Radio" ? ViewshedSource.Radio : ViewshedSource.Sensor;
+            var vsOn = Settings.Instance.GetBoolean(SetViewshed, false);
+            var wxOn = Settings.Instance.GetBoolean(SetWeather, false);
+            _layersPanel.SetState(vsOn, source, wxOn);
+
+            _layersPanel.ViewshedToggled += on =>
+            {
+                Settings.Instance[SetViewshed] = on.ToString();
+                _viewshed.Enabled = on;
+                if (!on)
+                {
+                    _mapLayers.ClearViewshed();
+                    _layersPanel.SetViewshedStatus("Off");
+                }
+            };
+            _layersPanel.SourceChanged += src =>
+            {
+                Settings.Instance[SetViewshedSource] = src.ToString();
+                _mapLayers.ClearViewshed();
+                _layersPanel.SetViewshedStatus("Computing…");
+                _viewshed.Source = src;
+            };
+            _layersPanel.WeatherToggled += on =>
+            {
+                Settings.Instance[SetWeather] = on.ToString();
+                _weather.Enabled = on;
+                if (!on)
+                    _mapLayers.ClearWeather();
+                _layersPanel.Card.SetData(on, _weather.Latest, _activeSnap);
+            };
+            _layersPanel.RefreshRequested += () => _weather.RefreshNow();
+
+            _viewshed.Updated += frame => fd.BeginInvokeIfRequired(() => ApplyViewshed(frame));
+            _weather.Updated += snap => fd.BeginInvokeIfRequired(() =>
+            {
+                if (_weather.Enabled)
+                    _mapLayers.SetWeather(snap);
+                _layersPanel.Card.SetData(_weather.Enabled, snap, _activeSnap);
+            });
+
+            _viewshed.Source = source;
+            _viewshed.Enabled = vsOn;
+            _weather.Enabled = wxOn;
+        }
+
+        private void ApplyViewshed(ViewshedFrame frame)
+        {
+            try
+            {
+                if (frame == null || !_viewshed.Enabled)
+                {
+                    if (frame != null && frame.Image != null)
+                        frame.Image.Dispose();
+                    _mapLayers.ClearViewshed();
+                    _layersPanel.SetViewshedStatus("Off");
+                    return;
+                }
+
+                if (frame.Image == null)
+                {
+                    // no observer yet (no position or home): keep the map clean and say why
+                    _mapLayers.ClearViewshed();
+                    _layersPanel.SetViewshedStatus(frame.Status);
+                    return;
+                }
+
+                if (frame.Source != _viewshed.Source)
+                {
+                    frame.Image.Dispose(); // computed before the source switched
+                    return;
+                }
+
+                _mapLayers.SetViewshed(frame.Image, frame.Result);
+                _layersPanel.SetViewshedStatus(frame.Status);
+            }
+            catch (Exception ex)
+            {
+                log.Error("OpsGCS viewshed draw", ex);
+            }
+        }
+
+        private GeoPoint WeatherCenter()
+        {
+            var v = _activeSnap;
+            if (v != null && v.Connected && v.HasPosition)
+                return new GeoPoint(v.Lat, v.Lon);
+            var c = _mapCenter;
+            // a world-zoomed map centred on 0,0 is not a place to fetch weather for
+            if (c != null && (Math.Abs(c.Lat) > 0.01 || Math.Abs(c.Lon) > 0.01))
+                return c;
+            return null;
+        }
+
         /// <summary>
         /// Upstream rebuilds the Flight Data tabs from the "tabcontrolactions" setting; list the
         /// OPS tab first there so the rebuild keeps it.
@@ -172,10 +299,12 @@ namespace MissionPlanner.OpsGCS
             }
 
             var names = tabs.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries).ToList();
-            if (names.Count > 0 && names[0] == OpsTabName)
+            if (names.Count > 1 && names[0] == OpsTabName && names[1] == LayersTabName)
                 return;
 
             names.Remove(OpsTabName);
+            names.Remove(LayersTabName);
+            names.Insert(0, LayersTabName);
             names.Insert(0, OpsTabName);
             Settings.Instance["tabcontrolactions"] = string.Join(";", names) + ";";
         }
@@ -271,6 +400,8 @@ namespace MissionPlanner.OpsGCS
             var tabs = FlightData.instance.tabControlactions;
             if (!tabs.TabPages.Contains(_opsTab))
                 tabs.TabPages.Insert(0, _opsTab);
+            if (_layersTab != null && !tabs.TabPages.Contains(_layersTab))
+                tabs.TabPages.Insert(Math.Min(1, tabs.TabPages.Count), _layersTab);
             if (select)
                 tabs.SelectedTab = _opsTab;
         }
@@ -479,10 +610,17 @@ namespace MissionPlanner.OpsGCS
                 return true;
             }
 
+            _activeSnap = activeSnap;
+
             MainV2.instance.BeginInvokeIfRequired(() =>
             {
                 try
                 {
+                    var pos = FlightData.instance.gMapControl1.Position;
+                    _mapCenter = new GeoPoint(pos.Lat, pos.Lng);
+                    if (_layersPanel != null && _layersTab != null && _layersTab.Visible)
+                        _layersPanel.Card.SetData(_weather.Enabled, _weather.Latest, activeSnap);
+
                     _healthStrip.SetState(activeName, activeSnap, activeHealth);
                     _missionStrip.SetState(activeSnap);
                     _opsPanel.Fleet.SetRows(rows);

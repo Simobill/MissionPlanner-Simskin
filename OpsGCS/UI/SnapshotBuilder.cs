@@ -65,6 +65,23 @@ namespace MissionPlanner.OpsGCS.UI
             s.AltM = cs.alt / (CurrentState.multiplieralt > 0 ? CurrentState.multiplieralt : 1f);
             s.TimeInAirSec = cs.timeInAir;
 
+            s.Lat = cs.lat;
+            s.Lon = cs.lng;
+            s.AltAmsl = cs.altasl / (CurrentState.multiplieralt > 0 ? CurrentState.multiplieralt : 1f);
+            s.HasPosition = Math.Abs(cs.lat) > 1e-6 || Math.Abs(cs.lng) > 1e-6;
+
+            var home = cs.HomeLocation;
+            if (home != null && (Math.Abs(home.Lat) > 1e-6 || Math.Abs(home.Lng) > 1e-6))
+            {
+                s.HomeLat = home.Lat;
+                s.HomeLon = home.Lng;
+                s.HomeAltAmsl = home.Alt;
+                s.HasHome = true;
+            }
+
+            s.WindFromDeg = cs.wind_dir;
+            s.WindMs = cs.wind_vel / ms;
+
             return s;
         }
     }

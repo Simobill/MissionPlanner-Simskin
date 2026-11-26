@@ -16,7 +16,7 @@
     "BattCautionPct": 35,
     "BattWarningPct": 20,
     "CellCount": 0,
-    "CellCautionV": 3.60,
+    "CellCautionV": 3.6,
     "CellWarningV": 3.45,
     "GpsMinFixType": 3,
     "GpsCautionSats": 10,
@@ -30,5 +30,27 @@
     "LinkStaleSec": 3.0,
     "VibeCaution": 30,
     "VibeWarning": 60
+  },
+  "Viewshed": {
+    "SensorRangeM": 5000,
+    "RadioRangeM": 15000,
+    "GcsMastHeightM": 6,
+    "CellM": 50,
+    "RecomputeMoveM": 100,
+    "MinIntervalSec": 2,
+    "SensorRefractionK": 0.07,
+    "RadioRefractionK": 0.13
+  },
+  "Weather": {
+    "RefreshMin": 10,
+    "StaleMin": 30,
+    "GridSpanKm": 30,
+    "GridN": 6,
+    "MetarStation": "",
+    "MetarSearchKm": 60,
+    "OpenMeteoUrl": "",
+    "OpenMeteoApiKey": "",
+    "MetarUrl": "",
+    "PrecipCautionMm": 0.5
   }
 }

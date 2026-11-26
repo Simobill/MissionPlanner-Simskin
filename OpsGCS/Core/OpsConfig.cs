@@ -42,6 +42,50 @@ namespace MissionPlanner.OpsGCS.Core
         public double VibeWarning { get; set; } = 60;
     }
 
+    public class ViewshedConfig
+    {
+        /// <summary>Radius around the vehicle for "what can the sensor see", metres.</summary>
+        public double SensorRangeM { get; set; } = 5000;
+
+        /// <summary>Radius around the GCS for "where does the radio reach at flight altitude", metres.</summary>
+        public double RadioRangeM { get; set; } = 15000;
+
+        /// <summary>GCS antenna height above the ground at home, metres.</summary>
+        public double GcsMastHeightM { get; set; } = 6;
+
+        /// <summary>Raster cell size, metres. SRTM is about 30 m, so finer adds cost without detail.</summary>
+        public double CellM { get; set; } = 50;
+
+        /// <summary>Recompute when the observer moves this far or changes altitude by this much, metres.</summary>
+        public double RecomputeMoveM { get; set; } = 100;
+
+        public double MinIntervalSec { get; set; } = 2;
+        public double SensorRefractionK { get; set; } = 0.07;
+        public double RadioRefractionK { get; set; } = 0.13;
+    }
+
+    public class WeatherConfig
+    {
+        public double RefreshMin { get; set; } = 10;
+        public double StaleMin { get; set; } = 30;
+
+        /// <summary>Wind/precipitation grid around the vehicle (or map centre): span and points per side.</summary>
+        public double GridSpanKm { get; set; } = 30;
+        public int GridN { get; set; } = 6;
+
+        /// <summary>Fixed METAR station (ICAO). Empty: nearest station within MetarSearchKm.</summary>
+        public string MetarStation { get; set; } = "";
+        public double MetarSearchKm { get; set; } = 60;
+
+        /// <summary>Open-Meteo endpoint; use https://customer-api.open-meteo.com/v1/forecast with an API key for licensed use.</summary>
+        public string OpenMeteoUrl { get; set; } = "";
+        public string OpenMeteoApiKey { get; set; } = "";
+        public string MetarUrl { get; set; } = "";
+
+        /// <summary>Precipitation (mm, latest model interval) that raises the caution line.</summary>
+        public double PrecipCautionMm { get; set; } = 0.5;
+    }
+
     /// <summary>
     /// Deployment configuration, read from opsgcs.json beside the executable.
     /// </summary>
@@ -73,6 +117,8 @@ namespace MissionPlanner.OpsGCS.Core
         };
 
         public OpsThresholds Thresholds { get; set; } = new OpsThresholds();
+        public ViewshedConfig Viewshed { get; set; } = new ViewshedConfig();
+        public WeatherConfig Weather { get; set; } = new WeatherConfig();
 
         public static OpsConfig Load(string directory)
         {
@@ -86,6 +132,10 @@ namespace MissionPlanner.OpsGCS.Core
                     {
                         if (cfg.Thresholds == null)
                             cfg.Thresholds = new OpsThresholds();
+                        if (cfg.Viewshed == null)
+                            cfg.Viewshed = new ViewshedConfig();
+                        if (cfg.Weather == null)
+                            cfg.Weather = new WeatherConfig();
                         if (cfg.OperatorMapMenuAllowlist == null)
                             cfg.OperatorMapMenuAllowlist = new List<string>();
                         return cfg;
