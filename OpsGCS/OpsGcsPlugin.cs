@@ -165,6 +165,8 @@ namespace MissionPlanner.OpsGCS
             MainV2.LayoutChanged += OnLayoutChanged;
 
             ApplyOpsThemeOnce(main);
+            ApplySkin();
+            main.MainMenu.ItemClicked += (s, e) => main.MainMenu.Invalidate();
 
             _uiReady = true;
             ApplyRole(_role);
@@ -315,7 +317,8 @@ namespace MissionPlanner.OpsGCS
         /// </summary>
         private static void ApplyOpsThemeOnce(MainV2 main)
         {
-            const string flag = "opsgcs_theme_v1";
+            // bump when custom.mpsystheme changes so existing profiles pick it up once
+            const string flag = "opsgcs_theme_v2";
             if (Settings.Instance[flag] != null)
                 return;
 
@@ -390,6 +393,26 @@ namespace MissionPlanner.OpsGCS
                 main.MenuArduPilot.Visible = engineer;
 
             EnsureOpsTab(false);
+            ApplySkin();
+        }
+
+        private string _skinnedScreen;
+
+        /// <summary>Menu bar, fonts, tabs, buttons, QuickViews and HUD; safe to repeat.</summary>
+        private void ApplySkin()
+        {
+            try
+            {
+                var main = MainV2.instance;
+                OpsSkin.StyleMenu(main, string.IsNullOrWhiteSpace(_cfg.Unit) ? _cfg.ProductName : _cfg.ProductName + " · " + _cfg.Unit);
+                OpsSkin.ApplyTree(main);
+                OpsSkin.StyleHud(FlightData.myhud);
+                _skinnedScreen = OpsSkin.CurrentScreen();
+            }
+            catch (Exception ex)
+            {
+                log.Error("OpsGCS skin", ex);
+            }
         }
 
         private void EnsureOpsTab(bool select)
@@ -616,6 +639,14 @@ namespace MissionPlanner.OpsGCS
             {
                 try
                 {
+                    // upstream re-themes a screen when it is shown: skin again after a switch
+                    var screen = OpsSkin.CurrentScreen();
+                    if (screen != _skinnedScreen)
+                    {
+                        ApplySkin();
+                        MainV2.instance.MainMenu.Invalidate();
+                    }
+
                     var pos = FlightData.instance.gMapControl1.Position;
                     _mapCenter = new GeoPoint(pos.Lat, pos.Lng);
                     if (_layersPanel != null && _layersTab != null && _layersTab.Visible)

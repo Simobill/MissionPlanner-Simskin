@@ -12,7 +12,8 @@ It adds a separate interface layer and changes upstream code as little as possib
 | Health/mission logic (pure, unit-tested) | `OpsGCS/Core/*` | none |
 | Dashboard panels, map layers | `OpsGCS/UI/*`, `OpsGCS/Services/*` | none |
 | Shortcut hook | `MainV2.ShortcutFilter` | +13 lines in `MainV2.cs` |
-| Dark theme | `custom.mpsystheme` (picked up by upstream on first run) | new file + csproj copy rule |
+| Dark theme | `custom.mpsystheme` (applied once per profile, re-applied when the file changes) | new file + csproj copy rule |
+| Skin (menu bar, fonts, tabs, buttons, Quick view, HUD) | `OpsGCS/UI/OpsSkin.cs`, re-applied after every screen switch | none |
 | Deployment config | `opsgcs.json` | new file + csproj copy rule |
 | Auto-update off | `app.config` | 2 values blanked |
 | CI | `.github/workflows/opsgcs.yml`; upstream jobs guarded to `ArduPilot/MissionPlanner` | 1 line per upstream job |

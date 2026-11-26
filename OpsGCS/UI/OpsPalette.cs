@@ -10,7 +10,9 @@ namespace MissionPlanner.OpsGCS.UI
     public static class OpsPalette
     {
         public static readonly Color Surface = Color.FromArgb(0x10, 0x16, 0x1F);
+        public static readonly Color SurfaceDeep = Color.FromArgb(0x0B, 0x10, 0x17);
         public static readonly Color SurfaceRaised = Color.FromArgb(0x18, 0x21, 0x2D);
+        public static readonly Color SurfaceRaised2 = Color.FromArgb(0x1E, 0x29, 0x36);
         public static readonly Color Border = Color.FromArgb(0x2A, 0x36, 0x46);
         public static readonly Color Text = Color.FromArgb(0xD8, 0xDE, 0xE6);
         public static readonly Color TextMuted = Color.FromArgb(0x8A, 0x96, 0xA6);
