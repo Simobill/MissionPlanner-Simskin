@@ -719,7 +719,8 @@
     <None Update="Drivers\x86\winusbcoinstaller2.dll">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Update="OpsGCS\Web\**\*">
+    <None Remove="OpsGCS\Web\**" />
+    <None Include="OpsGCS\Web\**\*">
       <Link>opsgcs-web\%(RecursiveDir)%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
