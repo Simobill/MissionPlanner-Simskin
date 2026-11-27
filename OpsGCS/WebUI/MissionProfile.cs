@@ -19,6 +19,13 @@ namespace MissionPlanner.OpsGCS.WebUI
     {
         public int To;
         public double Len;
+
+        /// <summary>Lowest planned height above terrain on the leg (m), and where (distance from start).</summary>
+        public double MinClear = double.MaxValue;
+        public double MinClearD;
+
+        /// <summary>False for climb-out from home and approach legs into a landing, where low clearance is expected.</summary>
+        public bool Checked = true;
     }
 
     public class ProfilePoint
@@ -33,6 +40,9 @@ namespace MissionPlanner.OpsGCS.WebUI
         public List<ProfilePoint> Profile = new List<ProfilePoint>();
         public List<ProfilePoint> WpMarks = new List<ProfilePoint>();
         public double TotalM;
+
+        /// <summary>Samples where no terrain data existed (the last known height was carried over).</summary>
+        public int TerrainMissing;
     }
 
     /// <summary>
@@ -77,6 +87,16 @@ namespace MissionPlanner.OpsGCS.WebUI
             }
         }
 
+        private static bool IsTerrainFrame(byte frame)
+        {
+            return frame == 10 || frame == 11;
+        }
+
+        private static bool IsLanding(ushort cmd)
+        {
+            return cmd == 21 || cmd == 85; // LAND, VTOL_LAND
+        }
+
         public static MissionProfileResult Build(IList<MissionItem> items, double homeAmsl, Func<double, double, double?> terrain, int maxSamples = 300)
         {
             var r = new MissionProfileResult();
@@ -93,7 +113,13 @@ namespace MissionPlanner.OpsGCS.WebUI
             for (int i = 1; i < nav.Count; i++)
             {
                 var len = Viewshed.DistanceM(nav[i - 1].Lat, nav[i - 1].Lon, nav[i].Lat, nav[i].Lon);
-                r.Legs.Add(new MissionLeg { To = nav[i].Seq, Len = len });
+                r.Legs.Add(new MissionLeg
+                {
+                    To = nav[i].Seq,
+                    Len = len,
+                    // climb-out from home and the approach into a landing are expected to be low
+                    Checked = nav[i - 1].Seq != 0 && !IsLanding(nav[i].Command)
+                });
                 total += len;
             }
 
@@ -106,6 +132,8 @@ namespace MissionPlanner.OpsGCS.WebUI
                 var t = terrain != null ? terrain(la, lo) : null;
                 if (t.HasValue && !double.IsNaN(t.Value))
                     lastTerrain = t.Value;
+                else
+                    r.TerrainMissing++;
                 return lastTerrain;
             };
 
@@ -113,32 +141,47 @@ namespace MissionPlanner.OpsGCS.WebUI
             for (int i = 0; i < nav.Count; i++)
             {
                 var a = nav[i];
-                var aAlt = a.Seq == 0 ? homeAmsl : PlannedAmsl(a, homeAmsl, ground(a.Lat, a.Lon));
-                r.WpMarks.Add(new ProfilePoint { D = d0, Amsl = aAlt, Terrain = ground(a.Lat, a.Lon) });
+                var aGround = ground(a.Lat, a.Lon);
+                var aAlt = a.Seq == 0 ? homeAmsl : PlannedAmsl(a, homeAmsl, aGround);
+                r.WpMarks.Add(new ProfilePoint { D = d0, Amsl = aAlt, Terrain = aGround });
                 if (i == nav.Count - 1)
                     break;
 
                 var b = nav[i + 1];
-                var len = r.Legs[i].Len;
-                var bAlt = PlannedAmsl(b, homeAmsl, ground(b.Lat, b.Lon));
+                var leg = r.Legs[i];
+                var len = leg.Len;
+                var bGround = ground(b.Lat, b.Lon);
+                var bAlt = PlannedAmsl(b, homeAmsl, bGround);
+                // ArduPilot holds height above terrain between two terrain-frame items; otherwise AMSL is interpolated
+                var follow = a.Seq != 0 && IsTerrainFrame(a.Frame) && IsTerrainFrame(b.Frame);
                 var n = Math.Max(1, (int)Math.Ceiling(len / step));
-                for (int k = 0; k < n; k++)
+                for (int k = 0; k <= n; k++)
                 {
                     var f = (double)k / n;
                     var la = a.Lat + (b.Lat - a.Lat) * f;
                     var lo = a.Lon + (b.Lon - a.Lon) * f;
-                    r.Profile.Add(new ProfilePoint { D = d0 + len * f, Amsl = aAlt + (bAlt - aAlt) * f, Terrain = ground(la, lo) });
+                    var g = k == 0 ? aGround : k == n ? bGround : ground(la, lo);
+                    var amsl = follow ? g + a.Z + (b.Z - a.Z) * f : aAlt + (bAlt - aAlt) * f;
+                    if (k < n)
+                        r.Profile.Add(new ProfilePoint { D = d0 + len * f, Amsl = amsl, Terrain = g });
+                    var clear = amsl - g;
+                    if (clear < leg.MinClear)
+                    {
+                        leg.MinClear = clear;
+                        leg.MinClearD = d0 + len * f;
+                    }
                 }
 
                 d0 += len;
             }
 
             var last = nav[nav.Count - 1];
+            var lastGround = ground(last.Lat, last.Lon);
             r.Profile.Add(new ProfilePoint
             {
                 D = total,
-                Amsl = PlannedAmsl(last, homeAmsl, ground(last.Lat, last.Lon)),
-                Terrain = ground(last.Lat, last.Lon)
+                Amsl = PlannedAmsl(last, homeAmsl, lastGround),
+                Terrain = lastGround
             });
             return r;
         }

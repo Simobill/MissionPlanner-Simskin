@@ -189,14 +189,15 @@ namespace MissionPlanner.OpsGCS.WebUI
         private void OnWebResourceRequested(object sender, CoreWebView2WebResourceRequestedEventArgs e)
         {
             int z, x, y;
-            if (!TileUrl.TryParse(e.Request.Uri, TileHost, out z, out x, out y))
+            string src;
+            if (!TileUrl.TryParse(e.Request.Uri, TileHost, out src, out z, out x, out y) || !Basemaps.IsKnown(src))
             {
                 e.Response = _view.CoreWebView2.Environment.CreateWebResourceResponse(null, 404, "Not Found", "");
                 return;
             }
 
             var deferral = e.GetDeferral();
-            var provider = _provider != null ? _provider() : null;
+            var provider = Basemaps.Resolve(src, _provider != null ? _provider() : null);
             Task.Run(() =>
             {
                 byte[] data = null;

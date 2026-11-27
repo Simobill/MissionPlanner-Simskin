@@ -123,6 +123,14 @@ namespace MissionPlanner.OpsGCS.Core
         /// </summary>
         public string WebHosting { get; set; } = "visual";
 
+        /// <summary>PLAN: minimum terrain clearance (m) on every cruise leg; lower blocks Write. FLY shades below it.</summary>
+        public double PlanMinClearanceM { get; set; } = 60;
+
+        /// <summary>PLAN: default altitude (m) and frame ("REL" above home, "AGL" terrain, "AMSL") for new items.</summary>
+        public double PlanDefaultAltM { get; set; } = 120;
+
+        public string PlanDefaultFrame { get; set; } = "REL";
+
         public bool WebVisualHosting
         {
             get { return !string.Equals(WebHosting, "windowed", StringComparison.OrdinalIgnoreCase); }

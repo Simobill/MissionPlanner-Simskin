@@ -120,7 +120,8 @@ namespace MissionPlanner.OpsGCS
             {
                 ["type"] = "state",
                 ["product"] = string.IsNullOrWhiteSpace(_cfg.Unit) ? _cfg.ProductName : _cfg.ProductName + " · " + _cfg.Unit,
-                ["role"] = _role == OpsRole.Engineer ? "ENGINEER" : "OPERATOR"
+                ["role"] = _role == OpsRole.Engineer ? "ENGINEER" : "OPERATOR",
+                ["planDefaults"] = PlanDefaults()
             };
 
             var vehicles = new JArray();
@@ -228,7 +229,7 @@ namespace MissionPlanner.OpsGCS
                 ["health"] = health,
                 ["worst"] = (int)HealthEvaluator.Worst(r.Health ?? new List<HealthItem>())
             };
-            v["home"] = s.HasHome ? new JObject { ["lat"] = s.HomeLat, ["lon"] = s.HomeLon } : null;
+            v["home"] = s.HasHome ? new JObject { ["lat"] = s.HomeLat, ["lon"] = s.HomeLon, ["alt"] = Math.Round(s.HomeAltAmsl, 1) } : null;
             return v;
         }
 
@@ -306,12 +307,16 @@ namespace MissionPlanner.OpsGCS
             _missionJson = new JObject
             {
                 ["ver"] = _missionVer,
-                ["minClearance"] = 60,
+                ["minClearance"] = _cfg.PlanMinClearanceM,
                 ["items"] = new JArray(prof.NavItems.Select(i => new JObject
                 {
                     ["seq"] = i.Seq, ["lat"] = i.Lat, ["lon"] = i.Lon, ["alt"] = i.Z, ["nav"] = true
                 })),
-                ["legs"] = new JArray(prof.Legs.Select(l => new JObject { ["to"] = l.To, ["len"] = Math.Round(l.Len, 1) })),
+                ["legs"] = new JArray(prof.Legs.Select(l => new JObject
+                {
+                    ["to"] = l.To, ["len"] = Math.Round(l.Len, 1), ["checked"] = l.Checked,
+                    ["minClear"] = l.MinClear == double.MaxValue ? (JToken)null : Math.Round(l.MinClear, 1)
+                })),
                 ["profile"] = new JArray(prof.Profile.Select(p => new JObject
                 {
                     ["d"] = Math.Round(p.D, 1), ["amsl"] = Math.Round(p.Amsl, 1), ["terrain"] = Math.Round(p.Terrain, 1)
@@ -457,6 +462,10 @@ namespace MissionPlanner.OpsGCS
 
                 case "engineer":
                     ToggleRole();
+                    break;
+
+                default:
+                    HandlePlanMessage(type, m);
                     break;
             }
         }
