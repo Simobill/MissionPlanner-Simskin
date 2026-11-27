@@ -65,8 +65,50 @@ namespace MissionPlanner.OpsGCS
             _healthStrip.Visible = !webOn;
             _missionStrip.Visible = !webOn;
             // the page has its own top bar on FLY; PLAN and engineer screens keep the native one
-            main.MainMenu.Visible = !webOn;
+            SetNativeTopBar(!webOn);
             _webScreen = OpsSkin.CurrentScreen();
+        }
+
+        private bool _nativeBarHidden;
+        private bool _panelWasVisible;
+        private bool _menuBtnWasVisible;
+
+        /// <summary>
+        /// Shows or hides Mission Planner's top bar. The menu strip sits inside MainV2.panel1 (and, with
+        /// auto-hide, behind the "menu" button), so hiding only the strip left the panel as dead space.
+        /// The panel's and button's previous visibility is restored, keeping upstream auto-hide working.
+        /// </summary>
+        private void SetNativeTopBar(bool show)
+        {
+            var main = MainV2.instance;
+            if (main == null)
+                return;
+            var panel = main.panel1;
+            var menuBtn = main.Controls.Find("menu", false).FirstOrDefault();
+            main.MainMenu.Visible = true;
+
+            if (!show)
+            {
+                if (_nativeBarHidden)
+                    return;
+                _panelWasVisible = panel != null && panel.Visible;
+                _menuBtnWasVisible = menuBtn != null && menuBtn.Visible;
+                if (panel != null)
+                    panel.Visible = false;
+                if (menuBtn != null)
+                    menuBtn.Visible = false;
+                _nativeBarHidden = true;
+            }
+            else if (_nativeBarHidden)
+            {
+                if (panel != null)
+                    panel.Visible = _panelWasVisible;
+                if (menuBtn != null)
+                    menuBtn.Visible = _menuBtnWasVisible;
+                _nativeBarHidden = false;
+            }
+
+            main.PerformLayout();
         }
 
         // ------------------------------------------------------------------ state out (built on the plugin thread)
@@ -399,7 +441,7 @@ namespace MissionPlanner.OpsGCS
                 case "nav":
                     if ((string)m["screen"] == "PLAN")
                     {
-                        MainV2.instance.MainMenu.Visible = true;
+                        SetNativeTopBar(true);
                         MainV2.instance.MenuFlightPlanner.PerformClick();
                     }
 

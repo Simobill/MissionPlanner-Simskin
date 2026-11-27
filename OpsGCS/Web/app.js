@@ -25,19 +25,65 @@
 
   $('zin').onclick = function () { map.zoomIn(); };
   $('zout').onclick = function () { map.zoomOut(); };
-  $('fit').onclick = function () { fitAll(); };
-  $('follow').onclick = function () { setFollow(!S.follow); };
-  function setFollow(on) { S.follow = on; $('follow').classList.toggle('on', on); }
+  $('fit').onclick = function () { if (!fitAll()) toast('Nothing to fit yet: no vehicle position, mission or overlay.'); };
+  $('follow').onclick = function () {
+    if (S.follow) { setFollow(false); toast('Follow off'); return; }
+    setFollow(true);
+    var a = S.st && active(S.st);
+    if (a && a.hasPos) map.panTo([a.lat, a.lon]);
+    else toast('Follow on: the map will centre on the selected vehicle once it reports a position.');
+  };
+  function setFollow(on) {
+    S.follow = on;
+    var b = $('follow');
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  }
   setFollow(true);
 
+  var toastTimer = null;
+  function toast(text) {
+    var t = $('maptoast');
+    t.textContent = text;
+    t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.hidden = true; }, 2600);
+  }
+
+  /** Fits vehicles, the mission, then any overlay; false when there is nothing on the map. */
   function fitAll() {
     var pts = [];
-    (S.st && S.st.vehicles || []).forEach(function (v) { if (v.hasPos) pts.push([v.lat, v.lon]); });
+    (S.st && S.st.vehicles || []).forEach(function (v) {
+      if (v.hasPos) pts.push([v.lat, v.lon]);
+      if (v.home) pts.push([v.home.lat, v.home.lon]);
+    });
     var m = S.st && S.st.mission;
     (m && m.items || []).forEach(function (w) { if (w.lat || w.lon) pts.push([w.lat, w.lon]); });
-    if (pts.length === 1) map.setView(pts[0], 15);
-    else if (pts.length) map.fitBounds(pts, { padding: [60, 60] });
+    if (!pts.length && vsOverlay) pts = [vsOverlay.getBounds().getSouthWest(), vsOverlay.getBounds().getNorthEast()];
+    if (!pts.length && lyrWx.getLayers().length) {
+      var b = L.latLngBounds([]);
+      lyrWx.eachLayer(function (l) { if (l.getLatLng) b.extend(l.getLatLng()); else if (l.getBounds) b.extend(l.getBounds()); });
+      if (b.isValid()) pts = [b.getSouthWest(), b.getNorthEast()];
+    }
+    if (!pts.length) return false;
+    if (pts.length === 1) map.setView(pts[0], Math.max(map.getZoom(), 15));
+    else map.fitBounds(pts, { padding: [60, 60], maxZoom: 17 });
+    return true;
   }
+
+  // ---------------------------------------------------------------- collapsible map panels
+  function store(key, val) {
+    try { if (val === undefined) return window.localStorage.getItem(key); window.localStorage.setItem(key, val); } catch (e) { /* storage unavailable */ }
+    return null;
+  }
+  function collapsible(panelId, hdId) {
+    var p = $(panelId), h = $(hdId), key = 'opsgcs.collapsed.' + panelId;
+    function set(c) { p.classList.toggle('collapsed', c); h.setAttribute('aria-expanded', c ? 'false' : 'true'); }
+    set(store(key) === '1');
+    h.onclick = function () { var c = !p.classList.contains('collapsed'); set(c); store(key, c ? '1' : '0'); };
+  }
+  collapsible('layers', 'layers-hd');
+  collapsible('wxcard', 'wx-hd');
 
   // ---------------------------------------------------------------- top bar
   document.querySelectorAll('.nav-tab').forEach(function (b) {
@@ -229,6 +275,10 @@
     $('vs-src').classList.toggle('off', !l.viewshed);
     document.querySelectorAll('#vs-src button').forEach(function (b) { b.classList.toggle('on', b.dataset.src === l.source); });
     $('vs-status').textContent = l.viewshed ? (l.vsStatus || 'Computing…') : 'Off';
+    var on = [];
+    if (l.viewshed) on.push('Viewshed');
+    if (l.weather) on.push('Weather');
+    $('layers-sum').textContent = on.length ? on.join(' · ') : 'none';
     $('legend').classList.toggle('vs', !!l.viewshed);
     $('legend').classList.toggle('wx', !!l.weather);
 
@@ -275,11 +325,13 @@
   }
 
   function renderWxCard(w, v) {
-    if (!w) { $('wxcard').innerHTML = '<div class="hd">WEATHER<span>fetching…</span></div>'; return; }
+    var ageEl = $('wx-age');
+    if (!w) { ageEl.textContent = 'fetching…'; ageEl.className = 'sum'; $('wx-body').innerHTML = ''; return; }
     var age = (Date.now() - Date.parse(w.fetched)) / 60000;
     var rows = w.lines || [];
-    $('wxcard').innerHTML = '<div class="hd">WEATHER<span' + (age > (w.staleMin || 30) ? ' class="lv-caution"' : '') + '>' +
-      (age < 1 ? 'updated just now' : 'updated ' + Math.round(age) + ' min ago') + '</span></div>' +
+    ageEl.textContent = age < 1 ? 'updated just now' : 'updated ' + Math.round(age) + ' min ago';
+    ageEl.className = 'sum' + (age > (w.staleMin || 30) ? ' lv-caution' : '') + (w.alert ? ' lv-caution' : '');
+    $('wx-body').innerHTML =
       '<div class="grid">' + rows.map(function (r) { return '<span class="k">' + esc(r[0]) + '</span><span>' + esc(r[1]) + '</span>'; }).join('') + '</div>' +
       (w.alert ? '<div class="alert">' + esc(w.alert) + '</div>' : '') +
       (w.errors ? '<div class="err">' + esc(w.errors) + '</div>' : '') +

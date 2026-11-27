@@ -47,25 +47,35 @@
     <div id="map"></div>
 
     <div class="map-tools">
-      <button id="zin" aria-label="Zoom in">+</button>
-      <button id="zout" aria-label="Zoom out">−</button>
-      <button id="fit" class="small">FIT</button>
-      <button id="follow" class="small">FLW</button>
+      <button id="zin" aria-label="Zoom in" title="Zoom in">+</button>
+      <button id="zout" aria-label="Zoom out" title="Zoom out">−</button>
+      <button id="fit" class="small" title="Fit vehicles, mission and overlays">FIT</button>
+      <button id="follow" class="small" title="Follow the selected vehicle (dragging the map turns it off)">FLW</button>
     </div>
+    <div class="maptoast" id="maptoast" hidden></div>
 
-    <div class="layers">
-      <div class="sec-title">MAP LAYERS</div>
-      <button class="toggle" id="t-vs"><span class="track"><span class="knob"></span></span>
-        <span><b>Live viewshed</b><br><small id="vs-status">Off</small></span></button>
-      <div class="chips" id="vs-src">
-        <button data-src="Sensor">Sensor</button>
-        <button data-src="Radio">GCS radio</button>
+    <div class="layers panel" id="layers">
+      <button class="panel-hd" id="layers-hd" aria-expanded="true" aria-controls="layers-body">
+        <span class="sec-title">MAP LAYERS</span><span class="sum" id="layers-sum"></span><span class="chev" aria-hidden="true"></span>
+      </button>
+      <div class="panel-body" id="layers-body">
+        <button class="toggle" id="t-vs"><span class="track"><span class="knob"></span></span>
+          <span><b>Live viewshed</b><br><small id="vs-status">Off</small></span></button>
+        <div class="chips" id="vs-src">
+          <button data-src="Sensor">Sensor</button>
+          <button data-src="Radio">GCS radio</button>
+        </div>
+        <button class="toggle" id="t-wx"><span class="track"><span class="knob"></span></span>
+          <span><b>Weather</b><br><small>Wind barbs · precipitation</small></span></button>
       </div>
-      <button class="toggle" id="t-wx"><span class="track"><span class="knob"></span></span>
-        <span><b>Weather</b><br><small>Wind barbs · precipitation</small></span></button>
     </div>
 
-    <div class="wxcard mono" id="wxcard" hidden></div>
+    <div class="wxcard panel mono" id="wxcard" hidden>
+      <button class="panel-hd" id="wx-hd" aria-expanded="true" aria-controls="wx-body">
+        <span class="sec-title">WEATHER</span><span class="sum" id="wx-age"></span><span class="chev" aria-hidden="true"></span>
+      </button>
+      <div class="panel-body" id="wx-body"></div>
+    </div>
 
     <div class="legend" id="legend">
       <span><i class="sw route"></i>Route</span>
