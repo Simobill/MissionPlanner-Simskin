@@ -79,6 +79,12 @@ namespace MissionPlanner.OpsGCS.UI
                 s.HasHome = true;
             }
 
+            s.Roll = cs.roll;
+            s.Pitch = cs.pitch;
+            s.Heading = cs.yaw;
+            s.ClimbMs = cs.verticalspeed / ms;
+            s.AirspeedMs = cs.airspeed / ms;
+
             s.WindFromDeg = cs.wind_dir;
             s.WindMs = cs.wind_vel / ms;
 

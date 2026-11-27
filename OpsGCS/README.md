@@ -55,6 +55,18 @@ Paste the output into `EngineerPinSha256` in `opsgcs.json`, which sits next to `
 
 The overlay always shows SI units (m, m/s), whatever display units are set in the Planner settings.
 
+## Operator web UI (FLY)
+
+In operator mode the FLY screen is a web page (`opsgcs-web/`) rendered in WebView2 on top of the Flight Data view. It reproduces the mockups: Inter and JetBrains Mono fonts, a Leaflet map, vehicle callouts, map layers, the weather card, the attitude display, hold-to-confirm commands, alerts and the altitude-profile timeline. Mission Planner remains the engine underneath.
+
+- **State:** Mission Planner pushes state to the page 4 times a second.
+- **Page requests:** select vehicle, mode change (only after the 1.5 s hold), connect/disconnect, layer toggles, PLAN, and engineer unlock. The page sends these back and Mission Planner carries them out.
+- **Map tiles:** these come from Mission Planner's own map provider and tile cache (`https://tiles.opsgcs.local/{z}/{x}/{y}`). The web map shows the same imagery as before, and cached areas work offline.
+- **Fallback screens:** PLAN and the engineer screens are still Mission Planner's own, skinned. If WebView2 isn't available, FLY falls back to Layout v2 and the alert list says so. `"Ui": "native"` in `opsgcs.json` turns the web UI off.
+- **Runtime:** WebView2 ships with Windows 10 and 11. On older or stripped images, install the Evergreen runtime. The page stores its data in `%USERPROFILE%\Documents\Mission Planner\opsgcs-webview2`.
+- **Review without Mission Planner:** open `opsgcs-web/index.html` in a normal browser. It runs on built-in demo data (`demo.js`).
+- **Licences:** fonts are SIL OFL 1.1 and Leaflet is BSD-2. Both licence files are under `opsgcs-web/`.
+
 ## Layout v2 (FLY screen)
 
 Set `"Layout": "stock"` in `opsgcs.json` to get Mission Planner's own layout back.

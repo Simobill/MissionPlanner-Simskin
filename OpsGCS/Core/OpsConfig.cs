@@ -108,6 +108,14 @@ namespace MissionPlanner.OpsGCS.Core
         /// <summary>"v2": fleet rail, centre map, HUD/commands/alerts column. "stock": upstream Flight Data layout.</summary>
         public string Layout { get; set; } = "v2";
 
+        /// <summary>"web": operator FLY screen rendered in WebView2 (falls back to Layout v2 if unavailable). "native": WinForms only.</summary>
+        public string Ui { get; set; } = "web";
+
+        public bool WebUi
+        {
+            get { return !string.Equals(Ui, "native", StringComparison.OrdinalIgnoreCase); }
+        }
+
         public bool LayoutV2
         {
             get { return !string.Equals(Layout, "stock", StringComparison.OrdinalIgnoreCase); }

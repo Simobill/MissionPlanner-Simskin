@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Windows.Forms;
 using log4net;
+using Newtonsoft.Json.Linq;
 using MissionPlanner.ArduPilot;
 using MissionPlanner.Controls;
 using MissionPlanner.GCSViews;
@@ -25,7 +26,7 @@ namespace MissionPlanner.OpsGCS
     ///  - health strip (top of map), mission strip (bottom of map), OPS tab (fleet + health)
     ///  - product branding of the main window
     /// </summary>
-    public class OpsGcsPlugin : MissionPlanner.Plugin.Plugin
+    public partial class OpsGcsPlugin : MissionPlanner.Plugin.Plugin
     {
         private static readonly ILog log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
 
@@ -149,6 +150,7 @@ namespace MissionPlanner.OpsGCS
                 fd.TabListOriginal.Insert(0, _opsTab);
 
             SetupLayers(fd);
+            SetupWebDeferred = () => SetupWeb(fd);
 
             if (_cfg.LayoutV2)
             {
@@ -186,6 +188,8 @@ namespace MissionPlanner.OpsGCS
 
             _uiReady = true;
             ApplyRole(_role);
+            if (SetupWebDeferred != null)
+                SetupWebDeferred();
             Brand();
             EnsureOpsTab(true);
         }
@@ -265,6 +269,8 @@ namespace MissionPlanner.OpsGCS
                         frame.Image.Dispose();
                     _mapLayers.ClearViewshed();
                     _layersPanel.SetViewshedStatus("Off");
+                    _vsStatus = "Off";
+                    WebViewshedCleared();
                     return;
                 }
 
@@ -273,6 +279,8 @@ namespace MissionPlanner.OpsGCS
                     // no observer yet (no position or home): keep the map clean and say why
                     _mapLayers.ClearViewshed();
                     _layersPanel.SetViewshedStatus(frame.Status);
+                    _vsStatus = frame.Status;
+                    WebViewshedCleared();
                     return;
                 }
 
@@ -282,8 +290,10 @@ namespace MissionPlanner.OpsGCS
                     return;
                 }
 
+                WebViewshedFrame(frame); // encode before the map layer takes ownership of the bitmap
                 _mapLayers.SetViewshed(frame.Image, frame.Result);
                 _layersPanel.SetViewshedStatus(frame.Status);
+                _vsStatus = frame.Status;
             }
             catch (Exception ex)
             {
@@ -364,6 +374,7 @@ namespace MissionPlanner.OpsGCS
             // setting DisplayConfiguration persists it and fires LayoutChanged -> OnLayoutChanged
             MainV2.DisplayConfiguration = OpsDisplayViews.For(role);
             _opsPanel.SetRole(_cfg.ProductName, role, _cfg.EngineerModeAvailable);
+            ApplyWebMode();
         }
 
         private void ToggleRole()
@@ -415,6 +426,7 @@ namespace MissionPlanner.OpsGCS
         }
 
         private string _skinnedScreen;
+        private Action SetupWebDeferred;
 
         /// <summary>Menu bar, fonts, tabs, buttons, QuickViews and HUD; safe to repeat.</summary>
         private void ApplySkin()
@@ -593,6 +605,12 @@ namespace MissionPlanner.OpsGCS
                     return;
             }
 
+            SendMode(port, mav, name, mode);
+        }
+
+        /// <summary>Sends a mode change and reports confirmation (or not) in the alert list ~3 s later.</summary>
+        private void SendMode(MAVLinkInterface port, MAVState mav, string name, string mode)
+        {
             var sysid = mav.sysid;
             var compid = mav.compid;
             _alerts.Add(name, HealthLevel.Unknown, "Sent mode " + mode.ToUpperInvariant());
@@ -732,6 +750,7 @@ namespace MissionPlanner.OpsGCS
             VehicleSnapshot activeSnap;
             List<HealthItem> activeHealth;
             string activeName;
+            JObject webState = null;
 
             try
             {
@@ -757,6 +776,9 @@ namespace MissionPlanner.OpsGCS
                     activeHealth = HealthEvaluator.Evaluate(activeSnap, _cfg.Thresholds);
                     activeName = activeSnap.Connected ? "SYS-" + MainV2.comPort.sysidcurrent : "NO VEHICLE";
                 }
+
+                if (_web != null && _web.Ready)
+                    webState = BuildWebState(rows, activeRow);
             }
             catch (Exception ex)
             {
@@ -778,6 +800,10 @@ namespace MissionPlanner.OpsGCS
                         ApplySkin();
                         MainV2.instance.MainMenu.Invalidate();
                     }
+
+                    if (_web != null && screen != _webScreen)
+                        ApplyWebMode();
+                    PostWebState(webState);
 
                     var pos = FlightData.instance.gMapControl1.Position;
                     _mapCenter = new GeoPoint(pos.Lat, pos.Lng);

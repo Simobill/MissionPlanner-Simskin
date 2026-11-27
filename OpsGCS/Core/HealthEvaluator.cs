@@ -69,6 +69,9 @@ namespace MissionPlanner.OpsGCS.Core
 
         // vehicle wind estimate: direction the wind blows FROM, speed m/s
         public double WindFromDeg, WindMs;
+
+        // attitude (deg) and climb rate (m/s), for the web HUD
+        public double Roll, Pitch, Heading, ClimbMs, AirspeedMs;
     }
 
     public static class HealthEvaluator

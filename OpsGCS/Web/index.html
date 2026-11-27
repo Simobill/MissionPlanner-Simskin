@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OPS GCS</title>
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="app">
+
+<header class="topbar">
+  <div class="brand" id="brand">OPS GCS</div>
+  <nav class="nav">
+    <button class="nav-tab active" data-nav="FLY">FLY</button>
+    <button class="nav-tab" data-nav="PLAN">PLAN</button>
+    <button class="nav-tab" data-nav="ANALYZE" disabled title="Not built yet">ANALYZE</button>
+  </nav>
+  <div class="spacer"></div>
+  <div class="link">
+    <label class="sr" for="port">Port</label>
+    <select id="port" class="mono"></select>
+    <label class="sr" for="baud">Baud</label>
+    <select id="baud" class="mono"></select>
+    <button id="connect" class="btn-connect">CONNECT</button>
+  </div>
+  <button id="role" class="role" title="Ctrl+Shift+E">OPERATOR</button>
+  <div class="clock mono" id="clock">--:--:--Z</div>
+</header>
+
+<section class="strip" id="strip">
+  <div class="cell w120"><div class="lbl">VEHICLE</div><div class="val mono accent" id="s-veh">NO VEHICLE</div></div>
+  <div class="cell w150"><div class="lbl">MODE</div><div class="val mono" id="s-mode">--</div></div>
+  <div class="cell w120"><div class="lbl">STATE</div><div class="val mono" id="s-state">--</div></div>
+  <div class="cells" id="s-health"></div>
+</section>
+
+<div class="main">
+  <aside class="rail-left">
+    <div class="sec-title" id="fleet-title">FLEET · 0</div>
+    <div id="fleet" class="fleet"></div>
+    <div class="sec-title bordered" id="health-title">HEALTH</div>
+    <div id="health" class="health-grid"></div>
+  </aside>
+
+  <main class="mapwrap">
+    <div id="map"></div>
+
+    <div class="map-tools">
+      <button id="zin" aria-label="Zoom in">+</button>
+      <button id="zout" aria-label="Zoom out">−</button>
+      <button id="fit" class="small">FIT</button>
+      <button id="follow" class="small">FLW</button>
+    </div>
+
+    <div class="layers">
+      <div class="sec-title">MAP LAYERS</div>
+      <button class="toggle" id="t-vs"><span class="track"><span class="knob"></span></span>
+        <span><b>Live viewshed</b><br><small id="vs-status">Off</small></span></button>
+      <div class="chips" id="vs-src">
+        <button data-src="Sensor">Sensor</button>
+        <button data-src="Radio">GCS radio</button>
+      </div>
+      <button class="toggle" id="t-wx"><span class="track"><span class="knob"></span></span>
+        <span><b>Weather</b><br><small>Wind barbs · precipitation</small></span></button>
+    </div>
+
+    <div class="wxcard mono" id="wxcard" hidden></div>
+
+    <div class="legend" id="legend">
+      <span><i class="sw route"></i>Route</span>
+      <span><i class="sw home"></i>Home</span>
+      <span class="vs-only"><i class="sw vis"></i>Visible</span>
+      <span class="vs-only"><i class="sw mask"></i>Masked by terrain</span>
+      <span class="wx-only"><i class="sw rain"></i>Precipitation</span>
+    </div>
+  </main>
+
+  <aside class="rail-right">
+    <div class="sec-title row"><span id="att-title">ATTITUDE</span></div>
+    <svg id="att" viewBox="0 0 272 150" role="img" aria-label="Attitude indicator">
+      <defs><clipPath id="hc"><rect width="272" height="150" rx="6"/></clipPath></defs>
+      <g clip-path="url(#hc)">
+        <g id="horizon">
+          <rect x="-200" y="-300" width="672" height="375" fill="#2D5F8E"/>
+          <rect x="-200" y="75" width="672" height="375" fill="#5A4528"/>
+          <line x1="-200" y1="75" x2="472" y2="75" stroke="#fff" stroke-width="2"/>
+          <g id="ladder" stroke="#fff" stroke-opacity=".6"></g>
+        </g>
+      </g>
+      <path d="M96 76 h28 l12 10 12 -10 h28" stroke="#E0A832" stroke-width="3" fill="none"/>
+      <text x="10" y="20" class="hudtxt" id="h-gs">GS --</text>
+      <text x="262" y="20" class="hudtxt" text-anchor="end" id="h-alt">ALT --</text>
+      <text x="10" y="142" class="hudtxt" id="h-hdg">HDG --</text>
+      <text x="262" y="142" class="hudtxt" text-anchor="end" id="h-vs">VS --</text>
+    </svg>
+
+    <div class="sec-title" id="cmd-title">COMMANDS</div>
+    <div class="cmds" id="cmds"></div>
+    <div class="note">Every command asks for a hold-to-confirm.</div>
+
+    <div class="sec-title bordered" id="alerts-title">ALERTS · 0</div>
+    <div class="alerts" id="alerts"></div>
+  </aside>
+</div>
+
+<footer class="timeline">
+  <div class="tl-head mono">
+    <span class="tl-title" id="tl-title">MISSION</span>
+    <span><i>WP</i> <b id="m-wp">--</b></span>
+    <span><i>TO WP</i> <b id="m-towp">--</b></span>
+    <span><i>ETA WP</i> <b id="m-eta">--:--</b></span>
+    <span><i>HOME</i> <b id="m-home">--</b></span>
+    <span><i>AIR</i> <b id="m-air">--:--</b></span>
+    <span><i>GS</i> <b id="m-gs">--</b></span>
+    <span class="grow"></span>
+    <b class="accent" id="m-pct">0%</b>
+  </div>
+  <svg id="profile" preserveAspectRatio="none" role="img" aria-label="Altitude profile along the mission"></svg>
+</footer>
+
+<div class="modal" id="modal" hidden>
+  <div class="dialog" role="dialog" aria-labelledby="dlg-title">
+    <div class="lbl">CONFIRM COMMAND</div>
+    <h1 id="dlg-title">Return to launch</h1>
+    <div class="target"><div class="mono big accent" id="dlg-veh">FW-1</div><div id="dlg-vdet"></div></div>
+    <div class="facts mono" id="dlg-facts"></div>
+    <p class="muted">Hold the button (or Space) for 1.5 s to send. Release early to cancel.</p>
+    <div class="dlg-btns">
+      <button id="dlg-cancel">Cancel</button>
+      <button id="dlg-hold" class="hold"><span class="fill" id="dlg-fill"></span><span id="dlg-holdtxt">Hold to send</span></button>
+    </div>
+  </div>
+</div>
+
+<div class="menu" id="modemenu" hidden></div>
+<div class="offline" id="offline" hidden>Waiting for Mission Planner…</div>
+</div>
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="demo.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

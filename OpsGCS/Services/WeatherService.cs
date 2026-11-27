@@ -164,7 +164,9 @@ namespace MissionPlanner.OpsGCS.Services
             req.UserAgent = UserAgent;
             req.Timeout = 15000;
             req.ReadWriteTimeout = 15000;
-            req.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
+            // gzip only: .NET Framework's "deflate" decoder expects raw deflate and fails on the
+            // zlib-wrapped stream some servers send ("Found invalid data while decoding")
+            req.AutomaticDecompression = DecompressionMethods.GZip;
             using (var resp = (HttpWebResponse)req.GetResponse())
             using (var s = resp.GetResponseStream())
             using (var r = new StreamReader(s, Encoding.UTF8))

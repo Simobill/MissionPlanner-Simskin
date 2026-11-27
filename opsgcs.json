@@ -5,6 +5,7 @@
   "StartAsEngineer": false,
   "ShowFleet": true,
   "Layout": "v2",
+  "Ui": "web",
   "OperatorMapMenuAllowlist": [
     "goHereToolStripMenuItem",
     "flyToHereAltToolStripMenuItem",

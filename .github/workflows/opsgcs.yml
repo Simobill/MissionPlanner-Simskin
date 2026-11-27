@@ -44,6 +44,8 @@ jobs:
           gci plugins | Where-Object { -not $_.PSIsContainer } | Remove-Item
           if (-not (Test-Path custom.mpsystheme)) { throw "custom.mpsystheme missing from output" }
           if (-not (Test-Path opsgcs.json)) { throw "opsgcs.json missing from output" }
+          if (-not (Test-Path opsgcs-web\index.html)) { throw "opsgcs-web missing from output" }
+          if (-not (Test-Path Microsoft.Web.WebView2.WinForms.dll)) { throw "WebView2 assemblies missing from output" }
           $sha = "${{ github.sha }}".Substring(0,8)
           "OpsGCS $sha built $(Get-Date -Format o)" | Out-File -Encoding utf8 opsgcs-build.txt
           7z a -tzip "..\..\..\OpsGCS-$sha.zip" *
