@@ -55,6 +55,25 @@ Paste the output into `EngineerPinSha256` in `opsgcs.json`, which sits next to `
 
 The overlay always shows SI units (m, m/s), whatever display units are set in the Planner settings.
 
+## Layout v2 (FLY screen)
+
+Set `"Layout": "stock"` in `opsgcs.json` to get Mission Planner's own layout back.
+
+Layout v2 re-hosts Mission Planner's own controls in three columns rather than copying them:
+
+| Column | Contents |
+|---|---|
+| Left | Fleet list (click a row to select that vehicle) above Mission Planner's tabs (HEALTH, LAYERS, Quick, Messages, Actions…) |
+| Centre | The map. The distance bar, wind indicator, legend, hdop/sats labels and tuning graph are hidden, because the strips above and below replace them |
+| Right | Compact HUD, command buttons for the selected vehicle, alert history |
+
+- **Commands:** Loiter (Hold on rovers), Return (RTL), Resume mission (Auto), and Change mode… with the vehicle's full mode list.
+  - Each one opens a dialog that shows the target vehicle, the mode change, distance home, battery and mission position.
+  - The command is sent only after the button (or Space) is held for 1.5 s.
+  - About 3 s later the alert list shows whether the vehicle confirmed the new mode.
+- **Alerts:** a health item getting worse, recovering, a mode change, and vehicle messages of WARNING or higher severity.
+- **HUD/map swap:** the context-menu option to swap the HUD and the map is hidden. Double-clicking the HUD still pops it out into its own window.
+
 ## Map layers (LAYERS tab)
 
 Both layers are off by default. Each toggle is saved per user.

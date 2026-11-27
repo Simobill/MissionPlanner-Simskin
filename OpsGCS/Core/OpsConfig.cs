@@ -105,6 +105,14 @@ namespace MissionPlanner.OpsGCS.Core
         /// <summary>Show the multi-vehicle fleet table.</summary>
         public bool ShowFleet { get; set; } = true;
 
+        /// <summary>"v2": fleet rail, centre map, HUD/commands/alerts column. "stock": upstream Flight Data layout.</summary>
+        public string Layout { get; set; } = "v2";
+
+        public bool LayoutV2
+        {
+            get { return !string.Equals(Layout, "stock", StringComparison.OrdinalIgnoreCase); }
+        }
+
         /// <summary>Map right-click items an operator keeps (control Name values in FlightData).</summary>
         public List<string> OperatorMapMenuAllowlist { get; set; } = new List<string>
         {

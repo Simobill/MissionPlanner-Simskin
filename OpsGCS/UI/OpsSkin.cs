@@ -75,6 +75,8 @@ namespace MissionPlanner.OpsGCS.UI
                 main.MenuConnect.DisplayStyle = ToolStripItemDisplayStyle.Text;
                 main.MenuConnect.Font = MenuFont;
                 main.MenuConnect.Padding = new Padding(14, 6, 14, 6);
+                main.MenuConnect.TextAlign = ContentAlignment.MiddleCenter;
+                main.MenuConnect.TextImageRelation = TextImageRelation.Overlay;
             }
 
             if (main.MenuArduPilot != null)
@@ -87,6 +89,7 @@ namespace MissionPlanner.OpsGCS.UI
                     Name = "opsgcsBrand",
                     Font = BrandFont,
                     ForeColor = OpsPalette.Accent,
+                    BackColor = OpsPalette.SurfaceDeep,
                     Padding = new Padding(4, 0, 18, 0)
                 };
                 menu.Items.Insert(0, _brand);
@@ -136,6 +139,8 @@ namespace MissionPlanner.OpsGCS.UI
             item.Padding = new Padding(16, 6, 16, 6);
             item.Margin = new Padding(2, 0, 2, 0);
             item.AutoSize = true;
+            item.TextAlign = ContentAlignment.MiddleCenter;
+            item.TextImageRelation = TextImageRelation.Overlay;
         }
 
         private class OpsMenuRenderer : ToolStripProfessionalRenderer
@@ -277,6 +282,10 @@ namespace MissionPlanner.OpsGCS.UI
             if (mb != null)
                 StyleButton(mb);
 
+            var grid = c as DataGridView;
+            if (grid != null)
+                StyleGrid(grid);
+
             foreach (Control child in c.Controls)
                 Walk(child);
         }
@@ -306,6 +315,57 @@ namespace MissionPlanner.OpsGCS.UI
             {
                 // family missing on this machine: keep upstream font
             }
+        }
+
+        // ------------------------------------------------------------------ PLAN screen
+
+        /// <summary>Upstream planner controls an operator does not need; hidden by name.</summary>
+        private static readonly string[] PlannerClutter =
+        {
+            "chk_grid", "lnk_kml", "lbl_status", "BUT_InjectCustomMap", "progressBarInjectCustomMap",
+            "but_writewpfast", "chk_usemavftp"
+        };
+
+        public static void StylePlanner(Control planner)
+        {
+            if (planner == null)
+                return;
+            foreach (var n in PlannerClutter)
+                foreach (var c in planner.Controls.Find(n, true))
+                    c.Visible = false;
+            ApplyTree(planner);
+        }
+
+        public static void StyleGrid(DataGridView g)
+        {
+            g.EnableHeadersVisualStyles = false;
+            g.BackgroundColor = OpsPalette.Surface;
+            g.GridColor = OpsPalette.Border;
+            g.BorderStyle = BorderStyle.None;
+            g.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
+            g.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single;
+            g.RowHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single;
+
+            var head = g.ColumnHeadersDefaultCellStyle;
+            head.BackColor = OpsPalette.SurfaceDeep;
+            head.ForeColor = OpsPalette.TextMuted;
+            head.SelectionBackColor = OpsPalette.SurfaceDeep;
+            head.SelectionForeColor = OpsPalette.TextMuted;
+            head.Font = new Font(UiFamily, 8.5f, FontStyle.Bold);
+
+            var rowHead = g.RowHeadersDefaultCellStyle;
+            rowHead.BackColor = OpsPalette.SurfaceDeep;
+            rowHead.ForeColor = OpsPalette.TextMuted;
+            rowHead.SelectionBackColor = OpsPalette.SurfaceRaised2;
+
+            var cell = g.DefaultCellStyle;
+            cell.BackColor = OpsPalette.Surface;
+            cell.ForeColor = OpsPalette.Text;
+            cell.SelectionBackColor = Color.FromArgb(0x2A, 0x23, 0x12);
+            cell.SelectionForeColor = OpsPalette.Accent;
+            cell.Font = new Font("Consolas", 9f);
+
+            g.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(0x13, 0x1A, 0x24);
         }
 
         // ------------------------------------------------------------------ pieces

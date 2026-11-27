@@ -4,6 +4,7 @@
   "EngineerPinSha256": "",
   "StartAsEngineer": false,
   "ShowFleet": true,
+  "Layout": "v2",
   "OperatorMapMenuAllowlist": [
     "goHereToolStripMenuItem",
     "flyToHereAltToolStripMenuItem",

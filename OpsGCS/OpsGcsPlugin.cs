@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Windows.Forms;
 using log4net;
+using MissionPlanner.ArduPilot;
 using MissionPlanner.Controls;
 using MissionPlanner.GCSViews;
 using MissionPlanner.OpsGCS.Core;
@@ -45,6 +46,9 @@ namespace MissionPlanner.OpsGCS
         private WeatherService _weather;
         private volatile VehicleSnapshot _activeSnap;
         private volatile GeoPoint _mapCenter;
+        private OpsShell _shell;
+        private readonly AlertLog _alerts = new AlertLog();
+        private int _declutterTick;
         private bool _uiReady;
         private bool _settingTitle;
         private int _busy;
@@ -135,16 +139,28 @@ namespace MissionPlanner.OpsGCS
             _healthStrip.SendToBack();
             _missionStrip.SendToBack();
 
-            // OPS tab
-            _opsPanel = new OpsTabPanel(_cfg.ShowFleet);
+            // OPS tab: with Layout v2 the fleet lives in the left rail, so the tab shows health only
+            _opsPanel = new OpsTabPanel(_cfg.ShowFleet && !_cfg.LayoutV2);
             _opsPanel.Fleet.VehicleSelected += SelectVehicle;
             _opsPanel.RoleButtonClicked += (s, e) => ToggleRole();
-            _opsTab = new TabPage("OPS") { Name = OpsTabName, BackColor = OpsPalette.Surface };
+            _opsTab = new TabPage(_cfg.LayoutV2 ? "HEALTH" : "OPS") { Name = OpsTabName, BackColor = OpsPalette.Surface };
             _opsTab.Controls.Add(_opsPanel);
             if (!fd.TabListOriginal.Contains(_opsTab))
                 fd.TabListOriginal.Insert(0, _opsTab);
 
             SetupLayers(fd);
+
+            if (_cfg.LayoutV2)
+            {
+                _shell = new OpsShell(fd);
+                _shell.Fleet.VehicleSelected += SelectVehicle;
+                _shell.Fleet.Visible = _cfg.ShowFleet;
+                _shell.Commands.CommandClicked += cmd => ConfirmAndSend(cmd.Label, cmd.Mode);
+                _shell.Commands.ModeMenuRequested += ShowModeMenu;
+                _shell.Attach();
+                // FlightData_Load (first show) may swap the HUD and map; re-host afterwards
+                fd.Load += (s, e) => fd.BeginInvoke((Action)(() => _shell.Attach()));
+            }
 
             RegisterOpsTabSetting(fd);
             // FlightData_Load rebuilds the tab list after plugins load, without raising LayoutChanged
@@ -393,6 +409,8 @@ namespace MissionPlanner.OpsGCS
                 main.MenuArduPilot.Visible = engineer;
 
             EnsureOpsTab(false);
+            if (_shell != null)
+                _shell.Attach();
             ApplySkin();
         }
 
@@ -407,6 +425,8 @@ namespace MissionPlanner.OpsGCS
                 OpsSkin.StyleMenu(main, string.IsNullOrWhiteSpace(_cfg.Unit) ? _cfg.ProductName : _cfg.ProductName + " · " + _cfg.Unit);
                 OpsSkin.ApplyTree(main);
                 OpsSkin.StyleHud(FlightData.myhud);
+                if (main.FlightPlanner != null)
+                    OpsSkin.StylePlanner(main.FlightPlanner);
                 _skinnedScreen = OpsSkin.CurrentScreen();
             }
             catch (Exception ex)
@@ -490,6 +510,110 @@ namespace MissionPlanner.OpsGCS
             {
                 _settingTitle = false;
             }
+        }
+
+        // ------------------------------------------------------------------ commands
+
+        /// <summary>Pause / RTL / resume for the active vehicle; mode names per firmware family.</summary>
+        private static List<CommandRequest> CommandsFor(MAVLinkInterface port)
+        {
+            var list = new List<CommandRequest>();
+            if (port == null || port.MAV == null || port.BaseStream == null || !port.BaseStream.IsOpen)
+                return list;
+            var fw = port.MAV.cs.firmware;
+            var rover = fw == Firmwares.ArduRover;
+            list.Add(new CommandRequest { Label = rover ? "Hold" : "Loiter here", Mode = rover ? "Hold" : "Loiter" });
+            list.Add(new CommandRequest { Label = "Return (RTL)", Mode = "RTL", Caution = true });
+            list.Add(new CommandRequest { Label = "Resume mission", Mode = "Auto" });
+            return list;
+        }
+
+        private void ShowModeMenu()
+        {
+            var port = MainV2.comPort;
+            if (port == null || port.MAV == null)
+                return;
+            var menu = new ContextMenuStrip { BackColor = OpsPalette.SurfaceRaised, ForeColor = OpsPalette.Text, ShowImageMargin = false };
+            List<KeyValuePair<int, string>> modes;
+            try
+            {
+                modes = Common.getModesList(port.MAV.cs.firmware);
+            }
+            catch
+            {
+                modes = new List<KeyValuePair<int, string>>();
+            }
+
+            foreach (var m in modes)
+            {
+                var name = m.Value;
+                var item = new ToolStripMenuItem(name) { ForeColor = OpsPalette.Text };
+                item.Click += (s, e) => ConfirmAndSend("Mode " + name, name);
+                menu.Items.Add(item);
+            }
+
+            if (menu.Items.Count == 0)
+                return;
+            menu.Show(Cursor.Position);
+        }
+
+        private void ConfirmAndSend(string label, string mode)
+        {
+            var port = MainV2.comPort;
+            if (port == null || port.MAV == null || port.BaseStream == null || !port.BaseStream.IsOpen)
+            {
+                MissionPlanner.MsgBox.CustomMessageBox.Show("No vehicle connected.", label);
+                return;
+            }
+
+            var mav = port.MAV;
+            var cs = mav.cs;
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            var name = ShortType(mav.aptype) + "-" + mav.sysid;
+            var snap = SnapshotBuilder.From(port, mav);
+
+            var facts = new List<KeyValuePair<string, string>>
+            {
+                new KeyValuePair<string, string>("Mode change", (cs.mode ?? "?").ToUpperInvariant() + "  ->  " + mode.ToUpperInvariant()),
+                new KeyValuePair<string, string>("Distance home", snap.DistToHomeM >= 1000
+                    ? string.Format(inv, "{0:0.00} km", snap.DistToHomeM / 1000) : string.Format(inv, "{0:0} m", snap.DistToHomeM)),
+                new KeyValuePair<string, string>("Battery", snap.BatteryRemainingPct >= 0
+                    ? snap.BatteryRemainingPct + "%  (" + snap.BatteryVoltage.ToString("0.0", inv) + " V)" : snap.BatteryVoltage.ToString("0.0", inv) + " V")
+            };
+            if (mode.Equals("RTL", StringComparison.OrdinalIgnoreCase) && snap.GroundSpeedMs > 1)
+                facts.Add(new KeyValuePair<string, string>("Time to home", HealthEvaluator.FormatDuration(snap.DistToHomeM / snap.GroundSpeedMs) +
+                    string.Format(inv, " at {0:0} m/s", snap.GroundSpeedMs)));
+            if (snap.MissionCount > 1)
+                facts.Add(new KeyValuePair<string, string>("Mission", string.Format(inv, "WP {0}/{1}", snap.CurrentWp, snap.MissionCount - 1)));
+
+            var detail = string.Format(inv, "{0} · sysid {1}", cs.firmware, mav.sysid);
+            using (var dlg = new HoldConfirmDialog(label, name, detail, facts, "Hold to send " + mode.ToUpperInvariant()))
+            {
+                if (dlg.ShowDialog(MainV2.instance) != DialogResult.OK)
+                    return;
+            }
+
+            var sysid = mav.sysid;
+            var compid = mav.compid;
+            _alerts.Add(name, HealthLevel.Unknown, "Sent mode " + mode.ToUpperInvariant());
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                try
+                {
+                    port.setMode(sysid, compid, mode);
+                    System.Threading.Thread.Sleep(3000);
+                    var now = port.MAVlist[sysid, compid].cs.mode ?? "";
+                    if (now.Equals(mode, StringComparison.OrdinalIgnoreCase))
+                        _alerts.Add(name, HealthLevel.Ok, "Mode " + now.ToUpperInvariant() + " confirmed");
+                    else
+                        _alerts.Add(name, HealthLevel.Caution, "Mode " + mode.ToUpperInvariant() + " not confirmed (now " + now + ")");
+                }
+                catch (Exception ex)
+                {
+                    log.Error("OpsGCS setMode", ex);
+                    _alerts.Add(name, HealthLevel.Warning, "Mode " + mode.ToUpperInvariant() + " failed: " + ex.Message);
+                }
+            });
         }
 
         // ------------------------------------------------------------------ fleet
@@ -612,6 +736,14 @@ namespace MissionPlanner.OpsGCS
             try
             {
                 rows = BuildRows();
+                foreach (var r in rows)
+                {
+                    _alerts.Observe(r.Name, r.Health, r.Snapshot.Mode);
+                    var cs = r.Mav.cs;
+                    if ((int)cs.messageHighSeverity <= (int)MAVLink.MAV_SEVERITY.WARNING)
+                        _alerts.ObserveMessage(r.Name, cs.messageHigh,
+                            (int)cs.messageHighSeverity <= (int)MAVLink.MAV_SEVERITY.CRITICAL);
+                }
                 var activeRow = rows.FirstOrDefault(r => r.Active);
                 if (activeRow != null)
                 {
@@ -656,6 +788,15 @@ namespace MissionPlanner.OpsGCS
                     _missionStrip.SetState(activeSnap);
                     _opsPanel.Fleet.SetRows(rows);
                     _opsPanel.SetDetail(activeHealth);
+
+                    if (_shell != null)
+                    {
+                        _shell.Fleet.SetRows(rows);
+                        _shell.Alerts.SetItems(_alerts);
+                        _shell.Commands.SetTarget(activeSnap.Connected ? activeName : null, CommandsFor(MainV2.comPort));
+                        if (++_declutterTick % 8 == 0)
+                            _shell.Declutter();
+                    }
                 }
                 catch (Exception ex)
                 {
