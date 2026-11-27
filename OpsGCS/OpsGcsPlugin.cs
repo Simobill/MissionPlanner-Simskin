@@ -537,7 +537,7 @@ namespace MissionPlanner.OpsGCS
             List<KeyValuePair<int, string>> modes;
             try
             {
-                modes = Common.getModesList(port.MAV.cs.firmware);
+                modes = MissionPlanner.ArduPilot.Common.getModesList(port.MAV.cs.firmware);
             }
             catch
             {
