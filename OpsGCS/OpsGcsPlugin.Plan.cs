@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using MissionPlanner.ArduPilot;
+using MissionPlanner.Controls;
 using MissionPlanner.OpsGCS.Core;
 using MissionPlanner.OpsGCS.UI;
 using MissionPlanner.OpsGCS.WebUI;

@@ -9,14 +9,44 @@
   var LV = ['unknown', 'ok', 'caution', 'warning'];
   var S = { st: null, follow: true, fitted: false, missionVer: -1, vsVer: -1, wxVer: -1, portsSig: '', userPicked: false };
 
+  var screenHooks = [];
+  function store(key, val) {
+    try { if (val === undefined) return window.localStorage.getItem(key); window.localStorage.setItem(key, val); } catch (e) { /* storage unavailable */ }
+    return null;
+  }
+
   function send(m) { if (bridge) bridge.postMessage(m); else if (window.OpsDemo) window.OpsDemo.handle(m); }
 
   // ---------------------------------------------------------------- map
   var map = L.map('map', { zoomControl: false, attributionControl: true, worldCopyJump: true, maxZoom: 20 }).setView([37.95, 23.72], 11);
-  if (bridge) {
-    L.tileLayer('https://tiles.opsgcs.local/{z}/{x}/{y}', { maxZoom: 20, maxNativeZoom: 19, attribution: 'Imagery via Mission Planner map provider' }).addTo(map);
-  }
   map.attributionControl.setPrefix('');
+
+  // Basemaps: Mission Planner serves every tile (and caches it), so the page only names the source.
+  var BASEMAPS = [
+    { id: 'mp', label: 'Mission Planner map', group: 'Imagery', max: 19, attr: 'Imagery via Mission Planner map provider' },
+    { id: 'esri-img', label: 'Esri World Imagery', group: 'Imagery', max: 19, attr: 'Imagery © Esri, Maxar, Earthstar Geographics' },
+    { id: 'google-sat', label: 'Google Satellite', group: 'Imagery', max: 20, attr: 'Imagery © Google' },
+    { id: 'google-hyb', label: 'Google Hybrid', group: 'Imagery', max: 20, attr: 'Imagery © Google' },
+    { id: 'bing-hyb', label: 'Bing Hybrid', group: 'Imagery', max: 19, attr: '© Microsoft' },
+    { id: 'topo', label: 'OpenTopoMap', group: 'Topographic', max: 17, attr: '© OpenStreetMap contributors, SRTM · style © OpenTopoMap (CC-BY-SA)' },
+    { id: 'esri-topo', label: 'Esri World Topo', group: 'Topographic', max: 19, attr: 'Tiles © Esri' },
+    { id: 'google-ter', label: 'Google Terrain', group: 'Topographic', max: 20, attr: '© Google' },
+    { id: 'osm', label: 'OpenStreetMap', group: 'Street', max: 19, attr: '© OpenStreetMap contributors' }
+  ];
+  var baseLayer = null, baseId = 'mp';
+  function basemap(id) { for (var i = 0; i < BASEMAPS.length; i++) if (BASEMAPS[i].id === id) return BASEMAPS[i]; return BASEMAPS[0]; }
+  function setBasemap(id) {
+    var b = basemap(id);
+    baseId = b.id;
+    store('opsgcs.basemap', b.id);
+    if (baseLayer) { map.removeLayer(baseLayer); baseLayer = null; }
+    if (bridge) {
+      baseLayer = L.tileLayer('https://tiles.opsgcs.local/' + b.id + '/{z}/{x}/{y}', { maxZoom: 20, maxNativeZoom: b.max, attribution: b.attr });
+      baseLayer.addTo(map).bringToBack();
+    }
+    $('basemap').value = b.id;
+    renderLayerSummary();
+  }
   var lyrRoute = L.layerGroup().addTo(map);
   var lyrVeh = L.layerGroup().addTo(map);
   var lyrWx = L.layerGroup().addTo(map);
@@ -52,6 +82,7 @@
 
   /** Fits vehicles, the mission, then any overlay; false when there is nothing on the map. */
   function fitAll() {
+    if (S.screen === 'PLAN' && Ops.planFit) return Ops.planFit();
     var pts = [];
     (S.st && S.st.vehicles || []).forEach(function (v) {
       if (v.hasPos) pts.push([v.lat, v.lon]);
@@ -72,23 +103,45 @@
   }
 
   // ---------------------------------------------------------------- collapsible map panels
-  function store(key, val) {
-    try { if (val === undefined) return window.localStorage.getItem(key); window.localStorage.setItem(key, val); } catch (e) { /* storage unavailable */ }
-    return null;
-  }
+  // collapsed state is kept per screen; on PLAN the panels start collapsed to leave the map to the route
   function collapsible(panelId, hdId) {
-    var p = $(panelId), h = $(hdId), key = 'opsgcs.collapsed.' + panelId;
+    var p = $(panelId), h = $(hdId);
+    var key = function () { return 'opsgcs.collapsed.' + panelId + (S.screen === 'PLAN' ? '.plan' : ''); };
     function set(c) { p.classList.toggle('collapsed', c); h.setAttribute('aria-expanded', c ? 'false' : 'true'); }
-    set(store(key) === '1');
-    h.onclick = function () { var c = !p.classList.contains('collapsed'); set(c); store(key, c ? '1' : '0'); };
+    function load() { var v = store(key()); set(v === null ? S.screen === 'PLAN' : v === '1'); }
+    load();
+    h.onclick = function () { var c = !p.classList.contains('collapsed'); set(c); store(key(), c ? '1' : '0'); };
+    screenHooks.push(load);
   }
   collapsible('layers', 'layers-hd');
   collapsible('wxcard', 'wx-hd');
 
+  (function () {
+    var groups = {}, order = [];
+    BASEMAPS.forEach(function (b) { if (!groups[b.group]) { groups[b.group] = []; order.push(b.group); } groups[b.group].push(b); });
+    $('basemap').innerHTML = order.map(function (g) {
+      return '<optgroup label="' + esc(g) + '">' + groups[g].map(function (b) { return '<option value="' + b.id + '">' + esc(b.label) + '</option>'; }).join('') + '</optgroup>';
+    }).join('');
+    $('basemap').onchange = function () { setBasemap(this.value); };
+    setBasemap(store('opsgcs.basemap') || 'mp');
+  })();
+
   // ---------------------------------------------------------------- top bar
   document.querySelectorAll('.nav-tab').forEach(function (b) {
-    b.onclick = function () { if (!b.disabled && b.dataset.nav !== 'FLY') send({ type: 'nav', screen: b.dataset.nav }); };
+    b.onclick = function () { if (!b.disabled) setScreen(b.dataset.nav); };
   });
+  function setScreen(name) {
+    if (name !== 'PLAN') name = 'FLY';
+    if (S.screen === name) return;
+    S.screen = name;
+    store('opsgcs.screen', name);
+    $('app').classList.toggle('plan', name === 'PLAN');
+    document.querySelectorAll('.nav-tab').forEach(function (b) { b.classList.toggle('active', b.dataset.nav === name); });
+    if (name === 'PLAN') { map.removeLayer(lyrRoute); S.followWas = S.follow; setFollow(false); }
+    else { lyrRoute.addTo(map); if (S.followWas) setFollow(true); }
+    screenHooks.forEach(function (f) { f(name); });
+    setTimeout(function () { map.invalidateSize(); if (S.st) renderTimeline(active(S.st), S.st.mission); }, 0);
+  }
   $('connect').onclick = function () { send({ type: 'connect', port: $('port').value, baud: $('baud').value }); };
   $('port').onchange = $('baud').onchange = function () { S.userPicked = true; };
   $('role').onclick = function () { send({ type: 'engineer' }); };
@@ -267,6 +320,9 @@
     b.onclick = function () { send({ type: 'layers', source: b.dataset.src }); };
   });
   function st() { return S.st || { layers: {} }; }
+  function renderLayerSummary() {
+    $('layers-sum').textContent = [basemap(baseId).label].concat(S.layerOn || []).join(' · ');
+  }
 
   function renderLayers(s) {
     var l = s.layers || {};
@@ -275,10 +331,10 @@
     $('vs-src').classList.toggle('off', !l.viewshed);
     document.querySelectorAll('#vs-src button').forEach(function (b) { b.classList.toggle('on', b.dataset.src === l.source); });
     $('vs-status').textContent = l.viewshed ? (l.vsStatus || 'Computing…') : 'Off';
-    var on = [];
-    if (l.viewshed) on.push('Viewshed');
-    if (l.weather) on.push('Weather');
-    $('layers-sum').textContent = on.length ? on.join(' · ') : 'none';
+    S.layerOn = [];
+    if (l.viewshed) S.layerOn.push('Viewshed');
+    if (l.weather) S.layerOn.push('Weather');
+    renderLayerSummary();
     $('legend').classList.toggle('vs', !!l.viewshed);
     $('legend').classList.toggle('wx', !!l.weather);
 
@@ -402,25 +458,37 @@
     }).join('');
   }
 
-  // ---------------------------------------------------------------- confirm dialog
-  var hold = { timer: null, start: 0, mode: null, key: null };
+  // ---------------------------------------------------------------- confirm dialog (hold to send)
+  var hold = { timer: null, start: 0, label: '', onConfirm: null };
+  function confirmHold(o) {
+    hold.label = o.hold || 'Hold to send';
+    hold.onConfirm = o.onConfirm;
+    $('dlg-kicker').textContent = o.kicker || 'CONFIRM COMMAND';
+    $('dlg-title').textContent = o.title;
+    $('dlg-veh').textContent = o.veh || '';
+    $('dlg-vdet').innerHTML = o.vdet || '';
+    $('dlg-facts').innerHTML = (o.facts || []).map(function (f) {
+      return '<span class="k">' + esc(f[0]) + '</span><span' + (f[2] ? ' class="lv-' + f[2] + '"' : '') + '>' + esc(f[1]) + '</span>';
+    }).join('');
+    $('dlg-holdtxt').textContent = hold.label;
+    $('dlg-fill').style.width = '0';
+    $('modal').hidden = false;
+    $('dlg-cancel').focus();
+  }
   function confirmCommand(label, mode) {
     var v = active(S.st);
     if (!v || !v.connected) return;
-    hold.mode = mode; hold.key = v.key;
-    $('dlg-title').textContent = label;
-    $('dlg-veh').textContent = v.name;
-    $('dlg-vdet').innerHTML = esc(v.firmware) + ' · sysid ' + esc(v.sysid) + '<br><span class="muted">Only this vehicle receives the command.</span>';
+    var key = v.key;
     var facts = [['Mode change', (v.mode || '?').toUpperCase() + '  →  ' + mode.toUpperCase()],
       ['Distance home', fmtDist(v.distHome)],
       ['Battery', (v.battPct >= 0 ? v.battPct + '%  ' : '') + '(' + v.battV.toFixed(1) + ' V)']];
     if (/^rtl$/i.test(mode) && v.gs > 1) facts.push(['Time to home', fmtDur(v.distHome / v.gs) + ' at ' + v.gs.toFixed(0) + ' m/s']);
     if (v.wpCount > 1) facts.push(['Mission', 'WP ' + v.wp + '/' + (v.wpCount - 1)]);
-    $('dlg-facts').innerHTML = facts.map(function (f) { return '<span class="k">' + esc(f[0]) + '</span><span>' + esc(f[1]) + '</span>'; }).join('');
-    $('dlg-holdtxt').textContent = 'Hold to send ' + mode.toUpperCase();
-    $('dlg-fill').style.width = '0';
-    $('modal').hidden = false;
-    $('dlg-cancel').focus();
+    confirmHold({
+      title: label, veh: v.name, facts: facts, hold: 'Hold to send ' + mode.toUpperCase(),
+      vdet: esc(v.firmware) + ' · sysid ' + esc(v.sysid) + '<br><span class="muted">Only this vehicle receives the command.</span>',
+      onConfirm: function () { send({ type: 'setMode', key: key, mode: mode }); }
+    });
   }
   function closeDialog() { stopHold(); $('modal').hidden = true; }
   function startHold() {
@@ -429,14 +497,14 @@
     hold.timer = setInterval(function () {
       var p = Math.min(1, (performance.now() - hold.start) / 1500);
       $('dlg-fill').style.width = (p * 100) + '%';
-      $('dlg-holdtxt').textContent = 'Hold to send ' + hold.mode.toUpperCase() + '  ' + (p * 1.5).toFixed(1) + ' s';
-      if (p >= 1) { stopHold(); $('modal').hidden = true; send({ type: 'setMode', key: hold.key, mode: hold.mode }); }
+      $('dlg-holdtxt').textContent = hold.label + '  ' + (p * 1.5).toFixed(1) + ' s';
+      if (p >= 1) { stopHold(); $('modal').hidden = true; var f = hold.onConfirm; hold.onConfirm = null; if (f) f(); }
     }, 30);
   }
   function stopHold() {
     if (hold.timer) { clearInterval(hold.timer); hold.timer = null; }
     $('dlg-fill').style.width = '0';
-    if (hold.mode) $('dlg-holdtxt').textContent = 'Hold to send ' + hold.mode.toUpperCase();
+    $('dlg-holdtxt').textContent = hold.label;
   }
   var hb = $('dlg-hold');
   hb.addEventListener('pointerdown', function (e) { hb.setPointerCapture(e.pointerId); startHold(); });
@@ -479,14 +547,18 @@
   }
 
   function drawProfile(prof, m, along) {
-    var svg = $('profile');
+    profileSvg($('profile'), prof, { marks: (m && m.wpMarks) || [], legs: m && m.legs, minClearance: m && m.minClearance, along: along, empty: 'No mission loaded on the selected vehicle.' });
+  }
+
+  /** Altitude profile: terrain fill, planned line, waypoint marks, shading where a checked leg is too low. */
+  function profileSvg(svg, prof, o) {
     var W = svg.clientWidth || 1000, H = svg.clientHeight || 110;
     svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
-    if (prof.length < 2) {
-      svg.innerHTML = '<text x="44" y="' + (H / 2) + '">No mission loaded on the selected vehicle.</text>';
+    if (!prof || prof.length < 2) {
+      svg.innerHTML = '<text x="44" y="' + (H / 2) + '">' + esc(o.empty || '') + '</text>';
       return;
     }
-    var L0 = 44, R = W - 4, T = 6, B = H - 18;
+    var L0 = 44, R = W - 4, T = o.labels ? 18 : 6, B = H - 18;
     var maxA = 0, minA = 1e9;
     prof.forEach(function (p) { maxA = Math.max(maxA, p.amsl, p.terrain); minA = Math.min(minA, p.terrain, p.amsl); });
     minA = Math.max(0, Math.floor(minA / 50) * 50 - 50); maxA = Math.ceil((maxA + 30) / 50) * 50;
@@ -501,17 +573,27 @@
     g += '<text x="' + L0 + '" y="' + (H - 3) + '">0 km</text><text x="' + (R - 60) + '" y="' + (H - 3) + '">' + (total / 1000).toFixed(1) + ' km</text>';
     var terr = 'M' + x(0) + ' ' + B + prof.map(function (p) { return ' L' + x(p.d).toFixed(1) + ' ' + y(p.terrain).toFixed(1); }).join('') + ' L' + x(total) + ' ' + B + 'Z';
     g += '<path d="' + terr + '" fill="#2E3A2C"/>';
-    // low clearance segments
-    var low = (m && m.minClearance) || 60;
+    // low clearance only on legs that are checked (not the climb-out or the landing approach)
+    var low = o.minClearance || 60, ranges = [], d0 = 0;
+    (o.legs || []).forEach(function (l) { if (l.checked !== false) ranges.push([d0, d0 + l.len]); d0 += l.len; });
+    var inChecked = function (d) {
+      if (!o.legs || !o.legs.length) return true;
+      for (var i = 0; i < ranges.length; i++) if (d >= ranges[i][0] - 0.5 && d <= ranges[i][1] + 0.5) return true;
+      return false;
+    };
     prof.forEach(function (p, i) {
-      if (i && p.amsl - p.terrain < low) g += '<rect x="' + x(prof[i - 1].d) + '" y="' + T + '" width="' + Math.max(2, x(p.d) - x(prof[i - 1].d)) + '" height="' + (B - T) + '" fill="#E8B32E" fill-opacity=".14"/>';
+      if (i && p.amsl - p.terrain < low && inChecked(p.d) && inChecked(prof[i - 1].d))
+        g += '<rect x="' + x(prof[i - 1].d) + '" y="' + T + '" width="' + Math.max(2, x(p.d) - x(prof[i - 1].d)) + '" height="' + (B - T) + '" fill="#E8B32E" fill-opacity=".16"/>';
     });
     g += '<polyline points="' + prof.map(function (p) { return x(p.d).toFixed(1) + ',' + y(p.amsl).toFixed(1); }).join(' ') + '" fill="none" stroke="#E0A832" stroke-width="2.5"/>';
-    (m.wpMarks || []).forEach(function (w) {
-      g += '<circle cx="' + x(w.d) + '" cy="' + y(w.amsl) + '" r="4.5" fill="#0B1017" stroke="#E0A832" stroke-width="2"/>';
+    (o.marks || []).forEach(function (w) {
+      if (o.skipHome !== false && w.seq === 0 && o.marks.length && !o.showHome) return;
+      var sel = o.selSeq != null && w.seq === o.selSeq, bad = o.badSeq && o.badSeq[w.seq];
+      g += '<circle cx="' + x(w.d) + '" cy="' + y(w.amsl) + '" r="' + (sel ? 6 : 4.5) + '" fill="' + (sel ? '#E0A832' : '#0B1017') + '" stroke="' + (bad ? '#E8B32E' : '#E0A832') + '" stroke-width="' + (bad ? 3 : 2) + '"/>';
+      if (o.labels && w.seq) g += '<text x="' + (x(w.d) - 4) + '" y="' + (y(w.amsl) - 9) + '" class="pmk">' + w.seq + '</text>';
     });
-    if (along > 0) {
-      var ax = x(Math.min(total, along));
+    if (o.along > 0) {
+      var ax = x(Math.min(total, o.along));
       g += '<line x1="' + ax + '" y1="' + T + '" x2="' + ax + '" y2="' + B + '" stroke="#E0A832" stroke-width="2"/>';
     }
     svg.innerHTML = g;
@@ -537,15 +619,35 @@
     renderTimeline(v, s.mission);
   }
 
-  if (bridge) {
-    bridge.addEventListener('message', function (e) {
-      var m = e.data;
-      if (m && m.type === 'state') onState(m);
-    });
-    $('offline').hidden = false;
-    send({ type: 'hello' });
-  } else if (window.OpsDemo) {
-    window.OpsDemo.start(onState);
+  var listeners = {};
+  function dispatch(m) {
+    if (!m || !m.type) return;
+    if (m.type === 'state') { onState(m); stateHooks.forEach(function (f) { f(m); }); return; }
+    (listeners[m.type] || []).forEach(function (f) { f(m); });
   }
+  var stateHooks = [];
+
+  // shared with plan.js
+  var Ops = window.Ops = {
+    map: map, send: send, $: $, esc: esc, toast: toast, store: store, fmtDist: fmtDist, fmtDur: fmtDur,
+    state: function () { return S.st; }, active: function () { return S.st ? active(S.st) : null; },
+    screen: function () { return S.screen; }, setScreen: function (n) { setScreen(n); },
+    on: function (type, f) { (listeners[type] = listeners[type] || []).push(f); },
+    onState: function (f) { stateHooks.push(f); }, onScreen: function (f) { screenHooks.push(f); },
+    confirmHold: confirmHold, profileSvg: profileSvg, planFit: null
+  };
+
+  function boot() {
+    if (bridge) {
+      bridge.addEventListener('message', function (e) { dispatch(e.data); });
+      $('offline').hidden = false;
+      send({ type: 'hello' });
+    } else if (window.OpsDemo) {
+      window.OpsDemo.start(function (st) { dispatch(st); }, dispatch);
+    }
+    setScreen(store('opsgcs.screen') === 'PLAN' ? 'PLAN' : 'FLY');
+  }
+  // plan.js loads after this file and registers its hooks before boot
+  window.addEventListener('DOMContentLoaded', boot);
   window.addEventListener('resize', function () { if (S.st) renderTimeline(active(S.st), S.st.mission); });
 })();

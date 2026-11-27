@@ -28,15 +28,47 @@
   <div class="clock mono" id="clock">--:--:--Z</div>
 </header>
 
-<section class="strip" id="strip">
+<section class="strip fly-only" id="strip">
   <div class="cell w120"><div class="lbl">VEHICLE</div><div class="val mono accent" id="s-veh">NO VEHICLE</div></div>
   <div class="cell w150"><div class="lbl">MODE</div><div class="val mono" id="s-mode">--</div></div>
   <div class="cell w120"><div class="lbl">STATE</div><div class="val mono" id="s-state">--</div></div>
   <div class="cells" id="s-health"></div>
 </section>
 
+<section class="planbar plan-only" id="planbar">
+  <div class="pb-name">
+    <label class="lbl" for="p-name">MISSION</label>
+    <input id="p-name" class="pb-title" value="Untitled mission" spellcheck="false" autocomplete="off">
+  </div>
+  <div class="vsep"></div>
+  <label class="pb-field"><span class="lbl">VEHICLE</span><select id="p-veh"></select></label>
+  <div class="pb-field"><label class="lbl" for="p-alt">NEW ITEM ALTITUDE</label>
+    <span class="altrow"><input id="p-alt" class="mono" type="number" step="5" min="0"><label class="sr" for="p-frame">Altitude reference</label><select id="p-frame">
+      <option value="REL">m above home</option><option value="AGL">m above terrain</option><option value="AMSL">m AMSL</option></select></span></div>
+  <div class="pb-status" id="p-status" role="status"></div>
+  <div class="spacer"></div>
+  <button id="p-new" class="pbtn">New</button>
+  <button id="p-open" class="pbtn">Open file</button>
+  <input type="file" id="p-file" accept=".waypoints,.txt,.mission" hidden>
+  <button id="p-save" class="pbtn">Save file</button>
+  <button id="p-read" class="pbtn">Read</button>
+  <button id="p-write" class="pbtn primary">Write…</button>
+</section>
+
 <div class="main">
-  <aside class="rail-left">
+  <aside class="plan-left plan-only">
+    <div class="sec-title row"><span id="p-count">ITEMS · 0</span><span class="p-total mono" id="p-total"></span></div>
+    <div class="p-row p-head mono"><span>#</span><span>COMMAND</span><span>ALT m</span><span>LEG km</span></div>
+    <div class="p-list mono" id="p-list"></div>
+    <div class="p-actions">
+      <button id="p-add" class="pbtn">Add item</button>
+      <button id="p-del" class="pbtn" title="Delete (Del)">Delete</button>
+      <button id="p-up" class="pbtn sq" aria-label="Move item up" title="Move up">↑</button>
+      <button id="p-down" class="pbtn sq" aria-label="Move item down" title="Move down">↓</button>
+    </div>
+  </aside>
+
+  <aside class="rail-left fly-only">
     <div class="sec-title" id="fleet-title">FLEET · 0</div>
     <div id="fleet" class="fleet"></div>
     <div class="sec-title bordered" id="health-title">HEALTH</div>
@@ -50,7 +82,8 @@
       <button id="zin" aria-label="Zoom in" title="Zoom in">+</button>
       <button id="zout" aria-label="Zoom out" title="Zoom out">−</button>
       <button id="fit" class="small" title="Fit vehicles, mission and overlays">FIT</button>
-      <button id="follow" class="small" title="Follow the selected vehicle (dragging the map turns it off)">FLW</button>
+      <button id="follow" class="small fly-only" title="Follow the selected vehicle (dragging the map turns it off)">FLW</button>
+      <button id="p-addmode" class="small plan-only" aria-pressed="false" title="Click the map to add waypoints (Esc to stop)">+WP</button>
     </div>
     <div class="maptoast" id="maptoast" hidden></div>
 
@@ -59,6 +92,7 @@
         <span class="sec-title">MAP LAYERS</span><span class="sum" id="layers-sum"></span><span class="chev" aria-hidden="true"></span>
       </button>
       <div class="panel-body" id="layers-body">
+        <label class="basemap"><span class="lbl">BASEMAP</span><select id="basemap"></select></label>
         <button class="toggle" id="t-vs"><span class="track"><span class="knob"></span></span>
           <span><b>Live viewshed</b><br><small id="vs-status">Off</small></span></button>
         <div class="chips" id="vs-src">
@@ -86,7 +120,16 @@
     </div>
   </main>
 
-  <aside class="rail-right">
+  <aside class="plan-right plan-only">
+    <div class="sec-title">PRE-WRITE CHECKS</div>
+    <div class="p-checks" id="p-checks"></div>
+    <div class="note" id="p-locknote"></div>
+    <label class="override" id="p-override-row" hidden><input type="checkbox" id="p-override"> Override failed terrain checks (engineer)</label>
+    <div class="sec-title bordered" id="p-ed-title">ITEM</div>
+    <div class="p-editor" id="p-editor"></div>
+  </aside>
+
+  <aside class="rail-right fly-only">
     <div class="sec-title row"><span id="att-title">ATTITUDE</span></div>
     <svg id="att" viewBox="0 0 272 150" role="img" aria-label="Attitude indicator">
       <defs><clipPath id="hc"><rect width="272" height="150" rx="6"/></clipPath></defs>
@@ -114,7 +157,7 @@
   </aside>
 </div>
 
-<footer class="timeline">
+<footer class="timeline fly-only">
   <div class="tl-head mono">
     <span class="tl-title" id="tl-title">MISSION</span>
     <span><i>WP</i> <b id="m-wp">--</b></span>
@@ -129,9 +172,21 @@
   <svg id="profile" preserveAspectRatio="none" role="img" aria-label="Altitude profile along the mission"></svg>
 </footer>
 
+<footer class="timeline plan-only">
+  <div class="tl-head mono">
+    <span class="tl-title">ALTITUDE PROFILE</span>
+    <span><i class="key key-plan"></i>Planned</span>
+    <span><i class="key key-terr"></i>Terrain</span>
+    <span class="lv-caution"><i class="key key-low"></i>Clearance below <b id="p-minclr">60</b> m</span>
+    <span class="grow"></span>
+    <b id="p-prof-status" class="muted"></b>
+  </div>
+  <svg id="p-profile" preserveAspectRatio="none" role="img" aria-label="Planned altitude and terrain along the draft mission"></svg>
+</footer>
+
 <div class="modal" id="modal" hidden>
   <div class="dialog" role="dialog" aria-labelledby="dlg-title">
-    <div class="lbl">CONFIRM COMMAND</div>
+    <div class="lbl" id="dlg-kicker">CONFIRM COMMAND</div>
     <h1 id="dlg-title">Return to launch</h1>
     <div class="target"><div class="mono big accent" id="dlg-veh">FW-1</div><div id="dlg-vdet"></div></div>
     <div class="facts mono" id="dlg-facts"></div>
@@ -149,5 +204,6 @@
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="demo.js"></script>
 <script src="app.js"></script>
+<script src="plan.js"></script>
 </body>
 </html>
