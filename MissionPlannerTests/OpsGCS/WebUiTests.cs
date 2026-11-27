@@ -10,6 +10,17 @@ namespace MissionPlannerTests.OpsGCS
     public class WebUiTests
     {
         [TestMethod]
+        public void WebHostingDefaultsToVisual()
+        {
+            var cfg = new MissionPlanner.OpsGCS.Core.OpsConfig();
+            Assert.IsTrue(cfg.WebVisualHosting);
+            cfg.WebHosting = "Windowed";
+            Assert.IsFalse(cfg.WebVisualHosting);
+            cfg.WebHosting = "anything-else";
+            Assert.IsTrue(cfg.WebVisualHosting);
+        }
+
+        [TestMethod]
         public void ParsesTileUrls()
         {
             int z, x, y;

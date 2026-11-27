@@ -36,7 +36,7 @@ namespace MissionPlanner.OpsGCS
             if (!_cfg.WebUi)
                 return;
 
-            _web = new OpsWebHost(fd, () => fd.gMapControl1.MapProvider);
+            _web = new OpsWebHost(fd, () => fd.gMapControl1.MapProvider, _cfg.WebVisualHosting);
             _web.MessageReceived += OnWebMessage;
             _web.Initialized += why =>
             {

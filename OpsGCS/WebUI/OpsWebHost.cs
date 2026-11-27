@@ -36,10 +36,35 @@ namespace MissionPlanner.OpsGCS.WebUI
         /// <summary>Raised on the UI thread once, with null on success or the failure reason.</summary>
         public event Action<string> Initialized;
 
-        public OpsWebHost(Control parent, Func<GMapProvider> provider)
+        private readonly bool _visualHosting;
+
+        /// <summary>WebView2's documented switch for hosting mode; read once, when the environment is created.</summary>
+        public const string HostingModeVariable = "COREWEBVIEW2_FORCED_HOSTING_MODE";
+        public const string WindowToVisual = "COREWEBVIEW2_HOSTING_MODE_WINDOW_TO_VISUAL";
+
+        public OpsWebHost(Control parent, Func<GMapProvider> provider, bool visualHosting = true)
         {
             _parent = parent;
             _provider = provider;
+            _visualHosting = visualHosting;
+        }
+
+        /// <summary>
+        /// Picks the hosting mode before the WebView2 environment exists. A value already set outside the
+        /// process (for example by a technician testing) is left alone.
+        /// </summary>
+        private void ApplyHostingMode()
+        {
+            var preset = Environment.GetEnvironmentVariable(HostingModeVariable);
+            if (!string.IsNullOrEmpty(preset))
+            {
+                log.Info("OpsGCS web: hosting mode preset outside OpsGCS: " + preset);
+                return;
+            }
+
+            if (_visualHosting)
+                Environment.SetEnvironmentVariable(HostingModeVariable, WindowToVisual);
+            log.Info("OpsGCS web: hosting mode " + (_visualHosting ? "window-to-visual" : "windowed"));
         }
 
         public bool Ready
@@ -72,6 +97,7 @@ namespace MissionPlanner.OpsGCS.WebUI
                 _view.BringToFront();
 
                 var dataDir = Path.Combine(MissionPlanner.Utilities.Settings.GetUserDataDirectory(), "opsgcs-webview2");
+                ApplyHostingMode();
                 var env = await CoreWebView2Environment.CreateAsync(null, dataDir, null);
                 await _view.EnsureCoreWebView2Async(env);
 

@@ -116,6 +116,18 @@ namespace MissionPlanner.OpsGCS.Core
             get { return !string.Equals(Ui, "native", StringComparison.OrdinalIgnoreCase); }
         }
 
+        /// <summary>
+        /// "visual" (default): WebView2 draws into Mission Planner's own window (Window to Visual hosting).
+        /// Mission Planner is DPI-unaware, so above 100 % display scaling a separately windowed WebView2
+        /// showed a second mouse pointer. "windowed": WebView2's own child window (the previous behaviour).
+        /// </summary>
+        public string WebHosting { get; set; } = "visual";
+
+        public bool WebVisualHosting
+        {
+            get { return !string.Equals(WebHosting, "windowed", StringComparison.OrdinalIgnoreCase); }
+        }
+
         public bool LayoutV2
         {
             get { return !string.Equals(Layout, "stock", StringComparison.OrdinalIgnoreCase); }
